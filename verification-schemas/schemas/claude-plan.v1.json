@@ -1,0 +1,106 @@
+{
+  "format": "pines-verification-schema-v1",
+  "schemaId": "pines.claude.plan",
+  "version": 1,
+  "providerId": "CLAUDE-PLAN",
+  "lifecycle": "qualified",
+  "request": {
+    "origin": "https://claude.ai",
+    "method": "GET",
+    "path": "/api/organizations",
+    "query": {},
+    "body": {
+      "kind": "empty"
+    }
+  },
+  "capture": {
+    "navigationUrl": "https://claude.ai/new",
+    "authOrigins": [
+      "https://claude.ai"
+    ],
+    "headers": [
+      {
+        "name": "user-agent",
+        "required": true,
+        "secret": true,
+        "validation": "visible-ascii"
+      }
+    ],
+    "cookies": [
+      "sessionKey"
+    ],
+    "trigger": {
+      "pathPrefix": "/api/"
+    }
+  },
+  "replay": {
+    "transform": "fixed-request-v1",
+    "headers": {
+      "accept": "application/json"
+    }
+  },
+  "limits": {
+    "maxSentBytes": 8192,
+    "maxRecvBytes": 65536,
+    "maxHeaderBytes": 8192,
+    "maxBodyBytes": 49152,
+    "maxJsonDepth": 32,
+    "sessionTimeoutMs": 120000,
+    "maxRecvRecords": 1024,
+    "concurrency": 1
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "disclosure": "full-json-body"
+  },
+  "selector": {
+    "kind": "claude-paid-personal-org-v1"
+  },
+  "fields": [
+    {
+      "id": "organization_uuid",
+      "pointer": "/uuid",
+      "type": "string"
+    },
+    {
+      "id": "rate_limit_tier",
+      "pointer": "/rate_limit_tier",
+      "type": "string"
+    },
+    {
+      "id": "capabilities",
+      "pointer": "/capabilities",
+      "type": "array"
+    }
+  ],
+  "checks": [
+    {
+      "op": "custom",
+      "field": "organization_uuid",
+      "handler": "claude-org-uuid-v1"
+    },
+    {
+      "op": "custom",
+      "field": "rate_limit_tier",
+      "handler": "claude-paid-tier-v1"
+    },
+    {
+      "op": "custom",
+      "field": "capabilities",
+      "handler": "claude-paid-capabilities-v1"
+    }
+  ],
+  "identity": {
+    "version": "claude-org-v1",
+    "kind": "field",
+    "field": "organization_uuid"
+  },
+  "claims": {
+    "enabled": true,
+    "domain": "claude.ai",
+    "templateIds": [
+      "CLAUDE-PLAN"
+    ]
+  }
+}

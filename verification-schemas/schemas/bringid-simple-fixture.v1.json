@@ -1,0 +1,44 @@
+{
+  "format": "pines-verification-schema-v1",
+  "schemaId": "pines.fixture.bringid-simple",
+  "version": 1,
+  "providerId": "BRINGID-SIMPLE-FIXTURE",
+  "lifecycle": "fixture",
+  "request": {
+    "origin": "https://schemas.example.test",
+    "method": "POST",
+    "path": "/profile",
+    "query": {},
+    "body": { "kind": "json", "value": {} }
+  },
+  "capture": {
+    "navigationUrl": "https://schemas.example.test/profile",
+    "authOrigins": ["https://schemas.example.test"],
+    "headers": [],
+    "cookies": []
+  },
+  "replay": { "transform": "fixed-request-v1", "headers": { "accept": "application/json", "content-type": "application/json" } },
+  "limits": {
+    "maxSentBytes": 4096,
+    "maxRecvBytes": 16384,
+    "maxHeaderBytes": 4096,
+    "maxBodyBytes": 12288,
+    "maxJsonDepth": 16,
+    "sessionTimeoutMs": 120000,
+    "maxRecvRecords": 256,
+    "concurrency": 1
+  },
+  "response": { "status": 200, "contentType": "application/json", "disclosure": "full-json-body" },
+  "fields": [
+    { "id": "userId", "pointer": "/data/userId", "type": "safe-integer" },
+    { "id": "level", "pointer": "/data/certificateInfo/kycLevel", "type": "safe-integer" },
+    { "id": "code", "pointer": "/code", "type": "string" }
+  ],
+  "checks": [
+    { "op": "gte", "field": "userId", "value": 1 },
+    { "op": "gte", "field": "level", "value": 2 },
+    { "op": "eq", "field": "code", "value": "000000" }
+  ],
+  "identity": { "version": "fixture-account-v1", "kind": "field", "field": "userId" },
+  "claims": { "enabled": false, "domain": "schemas.example.test", "templateIds": [] }
+}

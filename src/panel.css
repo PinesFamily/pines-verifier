@@ -1,0 +1,881 @@
+/* Pines Verifier's side panel: the Pines site's palette, type, buttons and loaders, sized for Chrome's side panel (320 px and up). One page, three views: the
+   welcome screen, connecting, and a run. */
+@font-face {
+  font-family: 'Geist';
+  src: url('fonts/geist-latin.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+:root {
+  color-scheme: dark;
+  font-family: 'Geist', system-ui, sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  --bg: #0c0d0d;
+  --heading: #f2f1ef;
+  --text-2: #9d9da2;
+  --mark: #32a95c;
+  --green: #b9d89c;
+  /* A wait: the soft yellow beside the site's soft green (#b9d89c) and red (#ff8686). */
+  --wait: #f3d17f;
+  --line: rgba(255, 255, 255, 0.085);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--heading);
+}
+/* The welcome screen is one page: its name and its button scroll with it, with no hairlines. */
+.panel[data-view='start'] .brand {
+  position: static;
+  margin: 0;
+  padding: 0;
+  box-shadow: none;
+}
+/* A run's actions stay at the foot, over a hairline, and what scrolls goes under them. */
+.run-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin: auto -20px -20px;
+  padding: 14px 20px 20px;
+  background: var(--bg);
+  box-shadow: 0 -1px 0 var(--line);
+}
+.run-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg);
+}
+.run-foot .actions {
+  display: contents;
+}
+.run-foot .meta {
+  margin: 4px 0 0;
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 18px 20px 20px;
+}
+.view {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+}
+.panel[data-view='start'] .view-start,
+.panel[data-view='connecting'] .view-connecting,
+.panel[data-view='run'] .view-run {
+  display: flex;
+}
+[hidden] {
+  display: none !important;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The site's wordmark, a size down, carrying the product's name in the same type. It stays at the top, over a
+   hairline, and what scrolls goes under it. */
+.brand {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: -18px -20px 0;
+  padding: 18px 20px 14px;
+  background: var(--bg);
+  box-shadow: 0 1px 0 var(--line);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.7px;
+  line-height: 1;
+}
+.pine {
+  width: 15px;
+  height: 16px;
+  margin-right: 1px;
+  fill: var(--mark);
+  transform: translateY(-1px);
+}
+
+/* The Pines member, looking around, with the three subscriptions floating around it. The art takes what height the
+   panel has spare, up to 186 px, and gives some back in a short window so the button stays in view; everything in it
+   is placed from its centre. */
+.hero {
+  position: relative;
+  flex: 1 0 150px;
+  max-height: 186px;
+  margin: 8px -20px 0;
+}
+.hero-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(#ffffff06 1px, transparent 1px), linear-gradient(90deg, #ffffff06 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: center;
+  mask-image: radial-gradient(ellipse 58% 62% at 50% 52%, #000, transparent);
+}
+.character {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 186px;
+  translate: -50% -44%;
+  mix-blend-mode: lighten;
+}
+/* The profile's member (pines-member.mp4), on the screen itself with nothing behind it. Its background is a flat
+   #121214, a shade lighter than this page: the filter moves the black point just past it (#121214 comes out near
+   #0b0b0b, the member's colours move under 4 %), and `lighten` then keeps the page wherever the video is darker. The
+   blend sits on the member's box, which is a stacking context of its own (its translate), and nothing above it
+   isolates, so it blends with the page itself, top glow and grid included. */
+.character video {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: contrast(1.08) brightness(0.962);
+  mask-image:
+    linear-gradient(to right, transparent, #000 8%, #000 92%, transparent),
+    linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent);
+  mask-composite: intersect;
+}
+.tile {
+  position: absolute;
+  z-index: 1;
+  width: 46px;
+  height: 46px;
+  animation: float 7s ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+.tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(var(--tilt));
+  filter: drop-shadow(0 12px 16px #000c);
+}
+.tile-chatgpt {
+  --tilt: -8deg;
+  --delay: 0s;
+  left: calc(50% - 126px);
+  top: calc(50% - 43px);
+}
+.tile-claude {
+  --tilt: 5deg;
+  --delay: -2.3s;
+  left: calc(50% + 50px);
+  top: calc(50% - 87px);
+}
+.tile-grok {
+  --tilt: 9deg;
+  --delay: -4.6s;
+  left: calc(50% + 86px);
+  top: calc(50% + 1px);
+}
+@keyframes float {
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+h1 {
+  margin: 14px 0 8px;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -1px;
+  text-wrap: balance;
+}
+
+/* The three steps ahead, each after a green line icon. */
+.points {
+  display: grid;
+  gap: 16px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.points li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.point-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--mark);
+}
+.point-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.points b {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.15px;
+}
+
+.actions {
+  margin-top: auto;
+  padding-top: 22px;
+}
+/* The welcome screen's foot, in the button's place: where verification starts, in plain words.
+   Nothing to press here: Pines opens this panel itself. The heading's type, smaller (18 to its 26), in the foot's grey,
+   centred. */
+.start-hint {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.55px;
+  text-align: center;
+  text-wrap: balance;
+  color: #7d7e85;
+}
+.button {
+  position: relative;
+  z-index: 5;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 21px;
+  border: 1px solid #ffffff26;
+  border-radius: inherit;
+  color: #f2f1ef;
+  text-decoration: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  appearance: none;
+  cursor: pointer;
+}
+.button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.5s var(--ease);
+}
+/* The arrow leans toward Pines under the pointer or focus; the label stays put. */
+.button:focus-visible svg {
+  transform: translateX(5px);
+}
+.button:focus-visible {
+  outline: 2px solid #fcfcfc;
+  outline-offset: 3px;
+}
+.foot {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  text-align: center;
+  color: #7d7e85;
+}
+@media (hover: hover) and (pointer: fine) {
+  .task[data-opens='true']:hover {
+    background: #17181b;
+  }
+  .button:hover svg {
+    transform: translateX(5px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mark-ring.is-running svg,
+  .line-spin {
+    animation-duration: 3s;
+  }
+  .tile {
+    animation: none;
+  }
+  .button svg {
+    transition: none;
+  }
+}
+
+/* Connecting: the profile's loading orb, on its own. */
+.view-connecting {
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding-bottom: 40px;
+}
+.view-connecting p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+/* A run: the provider it checks, the three steps, the review when it is due, and the one action there is. */
+.run-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+  margin-top: 20px;
+}
+.run-tile {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+}
+.run-tile > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 8px 12px #000a);
+}
+/* The launch success panel's check, and its two siblings for a stop and a wait. */
+.run-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #b9d89c;
+  box-shadow: 0 0 0 2.5px var(--bg);
+  color: #0c0d0d;
+}
+.run-badge[data-tone='error'] {
+  background: #ff8686;
+}
+.run-badge[data-tone='wait'] {
+  background: var(--wait);
+}
+.run-badge svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.run-head h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.6px;
+}
+.run-head p {
+  grid-column: 1 / -1;
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-2);
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+}
+
+/* The three steps as task rows (after beautifului.dev's Task Rows, redrawn in the site's colours): one card, a
+   hairline between the rows, each with its mark, its name and one detail, opening onto what it is doing. The running
+   one is open; any other opens on a click. */
+.tasks {
+  margin: 24px 0 20px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #141517;
+  list-style: none;
+}
+.task {
+  transition: background-color 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.task + .task {
+  border-top: 1px solid var(--line);
+}
+.task-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  padding: 0 6px 0 10px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.task[data-opens='false'] .task-head {
+  cursor: default;
+}
+.task-head:focus-visible {
+  outline: 2px solid #fcfcfc;
+  outline-offset: -2px;
+  border-radius: inherit;
+}
+.task-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+.mark-done,
+.mark-alert {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #b9d89c;
+  color: #0c0d0d;
+  animation: pop-in 0.3s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.mark-alert {
+  background: var(--wait);
+}
+.mark-done svg,
+.mark-alert svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mark-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+.mark-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 2;
+}
+.mark-ring .arc {
+  stroke: #9d9da2;
+  stroke-linecap: round;
+  stroke-dasharray: 18 48;
+}
+.mark-ring.is-running svg {
+  animation: spin 1.1s linear infinite;
+}
+.mark-ring b {
+  position: relative;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--heading);
+  font-variant-numeric: tabular-nums;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pop-in {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+.task-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--heading);
+}
+.task[data-state='waiting'] .task-title {
+  color: var(--text-2);
+}
+.task-meta {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.task-meta:empty {
+  display: none;
+}
+.task-chevron {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: -4px;
+  color: #7d7e85;
+}
+.task[data-opens='false'] .task-chevron {
+  visibility: hidden;
+}
+.task-chevron svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.task[data-open='true'] .task-chevron svg {
+  transform: rotate(180deg);
+}
+.task-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.task[data-open='true'] .task-body {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.task-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.task-content {
+  padding: 2px 14px 13px;
+}
+.task-rows {
+  display: grid;
+  gap: 7px;
+}
+.task-line-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.task-line-row[data-status='ahead'] {
+  color: #6f7076;
+}
+.line-status {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+}
+.line-done {
+  display: grid;
+  color: var(--mark);
+}
+.line-done svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.line-spin {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--line);
+  border-top-color: #9d9da2;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+.line-time {
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.line-wait {
+  font-size: 12px;
+  color: var(--wait);
+}
+/* The one thing to do meanwhile, in the site's soft green. */
+.task-line-row[data-tone='hint'] {
+  margin-top: 2px;
+  color: var(--green);
+}
+.task[data-open='true'] .task-line-row {
+  animation: fade-up 0.3s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.task[data-open='true'] .task-line-row:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.task[data-open='true'] .task-line-row:nth-child(3) {
+  animation-delay: 0.12s;
+}
+.task[data-open='true'] .task-line-row:nth-child(4) {
+  animation-delay: 0.18s;
+}
+@keyframes fade-up {
+  from {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+}
+
+/* What Pines receives: the first plain fields of the response, the login's hidden part, and the whole of it behind a
+   toggle. */
+.review {
+  min-width: 0;
+}
+.rows {
+  margin: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.row:first-child {
+  padding-top: 0;
+}
+/* The summary of a review this panel never saw ends on its last row. */
+.review:has(details[hidden]) .row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.row dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.row dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--heading);
+  font-variant-numeric: tabular-nums;
+}
+.row.is-ok dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.row dd span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row.is-ok dd svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--mark);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.row.is-hidden dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.row.is-hidden dd svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--mark);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.review-note {
+  margin: 9px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #7d7e85;
+}
+.review details {
+  margin-top: 10px;
+}
+.review summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+}
+.review summary::-webkit-details-marker {
+  display: none;
+}
+.review summary svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s var(--ease);
+}
+.review details[open] summary svg {
+  transform: rotate(180deg);
+}
+.review pre {
+  /* Five lines, then it scrolls inside. */
+  max-height: calc(7.5em + 24px);
+  margin: 10px 0 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 10px;
+  background: var(--bg);
+  font:
+    11.5px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  color: #b9bac0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.capture .button {
+  margin-top: 12px;
+  border-radius: 100px;
+}
+.capture p {
+  margin: 18px 0 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 0 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.note svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--mark);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The run's actions at the foot: the site's white primary pill for the one step forward, its outlined secondary pill
+   for Cancel, as in the site's dialogs. */
+.run-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.run-actions .button {
+  flex: none;
+  border-radius: 100px;
+  transition:
+    background-color 0.1s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 160ms var(--ease);
+}
+.run-actions .button:active {
+  transform: scale(0.97);
+}
+.button.primary {
+  border-color: rgba(30, 30, 30, 0.06);
+  background: #fcfcfc;
+  color: #050505;
+}
+.button.secondary {
+  border-color: rgba(252, 252, 252, 0.1);
+  background: transparent;
+  color: #fcfcfc;
+}
+.button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+.help {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+  color: #ff8686;
+}
+/* Not an error: the worker is back in a moment. */
+.help[data-tone='quiet'] {
+  color: var(--text-2);
+}
+.help:empty {
+  display: none;
+}
+.meta {
+  margin: 14px 0 0;
+  font-size: 12px;
+  text-align: center;
+  color: #6f7076;
+  font-variant-numeric: tabular-nums;
+}
+@media (hover: hover) and (pointer: fine) {
+  .review summary:hover {
+    color: var(--heading);
+  }
+  .button.primary:hover {
+    background: #e0e0e0;
+  }
+  .button.secondary:hover {
+    background: rgba(252, 252, 252, 0.1);
+  }
+}

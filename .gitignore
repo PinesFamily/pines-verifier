@@ -1,0 +1,8 @@
+dist/
+dist-capture/
+reports/
+node_modules/
+release/
+.env
+.env.*
+*.pem

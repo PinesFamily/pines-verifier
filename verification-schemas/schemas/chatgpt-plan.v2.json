@@ -1,0 +1,84 @@
+{
+  "format": "pines-verification-schema-v1",
+  "schemaId": "pines.chatgpt.plan",
+  "version": 2,
+  "providerId": "CHATGPT-SUBSCRIPTION",
+  "lifecycle": "qualified",
+  "request": {
+    "origin": "https://chatgpt.com",
+    "method": "GET",
+    "path": "/backend-api/wham/usage",
+    "query": {},
+    "body": {
+      "kind": "empty"
+    }
+  },
+  "capture": {
+    "navigationUrl": "https://chatgpt.com/#settings/Usage",
+    "authOrigins": [
+      "https://chatgpt.com"
+    ],
+    "headers": [
+      {
+        "name": "authorization",
+        "required": true,
+        "secret": true,
+        "validation": "bearer"
+      },
+      {
+        "name": "user-agent",
+        "required": true,
+        "secret": true,
+        "validation": "visible-ascii"
+      }
+    ],
+    "cookies": []
+  },
+  "replay": {
+    "transform": "fixed-request-v1",
+    "headers": {
+      "accept": "application/json"
+    }
+  },
+  "limits": {
+    "maxSentBytes": 8192,
+    "maxRecvBytes": 65536,
+    "maxHeaderBytes": 8192,
+    "maxBodyBytes": 49152,
+    "maxJsonDepth": 32,
+    "sessionTimeoutMs": 120000,
+    "maxRecvRecords": 1024,
+    "concurrency": 1
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "disclosure": "full-json-body"
+  },
+  "fields": [
+    {
+      "id": "plan_type",
+      "pointer": "/plan_type",
+      "type": "string"
+    }
+  ],
+  "checks": [
+    {
+      "op": "custom",
+      "field": "plan_type",
+      "handler": "chatgpt-plan-v1"
+    }
+  ],
+  "identity": {
+    "version": "legacy-plan-wallet-v1",
+    "kind": "legacy-plan-wallet",
+    "field": "plan_type"
+  },
+  "claims": {
+    "enabled": true,
+    "domain": "chatgpt.com",
+    "templateIds": [
+      "CHATGPT-SUBSCRIPTION"
+    ]
+  }
+}

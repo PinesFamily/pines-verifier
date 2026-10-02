@@ -1,0 +1,28 @@
+{
+  "format": "pines-verification-schema-v1",
+  "schemaId": "pines.fixture.httpbingo",
+  "version": 1,
+  "providerId": "HTTPBINGO-PUBLIC-FIXTURE",
+  "lifecycle": "fixture",
+  "request": { "origin": "https://httpbingo.org", "method": "GET", "path": "/json", "query": {}, "body": { "kind": "empty" } },
+  "capture": { "navigationUrl": "https://httpbingo.org/json", "authOrigins": ["https://httpbingo.org"], "headers": [], "cookies": [] },
+  "replay": { "transform": "fixed-request-v1", "headers": { "accept": "application/json", "user-agent": "pines-receipt-test/1.0" } },
+  "limits": {
+    "maxSentBytes": 4096, "maxRecvBytes": 16384, "maxHeaderBytes": 4096,
+    "maxBodyBytes": 12288, "maxJsonDepth": 16, "sessionTimeoutMs": 120000,
+    "maxRecvRecords": 256, "concurrency": 1
+  },
+  "response": { "status": 200, "contentType": "application/json", "disclosure": "full-json-body" },
+  "fields": [
+    { "id": "author", "pointer": "/slideshow/author", "type": "string" },
+    { "id": "title", "pointer": "/slideshow/title", "type": "string" },
+    { "id": "slides", "pointer": "/slideshow/slides", "type": "array" }
+  ],
+  "checks": [
+    { "op": "eq", "field": "author", "value": "Yours Truly" },
+    { "op": "eq", "field": "title", "value": "Sample Slide Show" },
+    { "op": "array-length-gte", "field": "slides", "value": 2 }
+  ],
+  "identity": { "version": "public-fixture-v1", "kind": "field", "field": "author" },
+  "claims": { "enabled": false, "domain": "httpbingo.org", "templateIds": [] }
+}

@@ -1,0 +1,47 @@
+[
+  {
+    "schemaId": "pines.chatgpt.plan",
+    "version": 1,
+    "digest": "sha256:fd134808920941c28e463156be70f8689c837daebbaa2d695e25f88118f7b9d3"
+  },
+  {
+    "schemaId": "pines.fixture.bringid-simple",
+    "version": 1,
+    "digest": "sha256:358d84c95f9ed6cf7317733ab51851cd5bd77dc750ca1d78c0c7c27d7bcb8b4c"
+  },
+  {
+    "schemaId": "pines.fixture.httpbingo",
+    "version": 1,
+    "digest": "sha256:156708aa248098c3b4e516dd63c132953a8b28a1ca3d0896225629b0b44d656e"
+  },
+  {
+    "schemaId": "pines.fixture.httpbingo-private",
+    "version": 1,
+    "digest": "sha256:41f33bfd6af33b542cc585f428aae8491564b868fef3cc6279dffd1165fe4401"
+  },
+  {
+    "schemaId": "pines.chatgpt.plan",
+    "version": 2,
+    "digest": "sha256:92d0039cee06be6596e67c0818a17abd2a71dab89caabcda8026db00f0ee91c7"
+  },
+  {
+    "schemaId": "pines.chatgpt.plan",
+    "version": 3,
+    "digest": "sha256:7b14d797875c45886e8f5b9fc6a6103b6f4c39a1caa3b1e26b40c05437af7b64"
+  },
+  {
+    "schemaId": "pines.claude.plan",
+    "version": 1,
+    "digest": "sha256:6e7573443be1b7e5ae748076ae5542d47b5884dce6ca3d7d31a03e24c980e174"
+  },
+  {
+    "schemaId": "pines.grok.plan",
+    "version": 1,
+    "digest": "sha256:9d8cd003ba63f0658de65300fca00d32a3163f6008584245e728bab6da605cd0"
+  },
+  {
+    "schemaId": "pines.fixture.bench",
+    "version": 1,
+    "digest": "sha256:b5b5f3a4a71956d34e1ecca2bb2bd01b1c1db8a6efba9eb6d4c967915daee4c0"
+  }
+]
