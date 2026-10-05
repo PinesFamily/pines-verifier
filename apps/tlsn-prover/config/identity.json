@@ -1,0 +1,6 @@
+{
+  "purpose": "Chrome Web Store item identity for Pines Verifier; public key only",
+  "note": "Taken from the CRX3 the store serves for 0.9.2 and checked against its signed crx_id. Migrated from the unpacked pilot key ecdnaaohmmdgeihflmlcbhgbcgfnacme on 2026-09-30, because the store assigns an item its own id and refuses a manifest carrying `key`.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxGxWwduuesnqXCM32Tm8WUqM99ZIFLAAcN/76wyvENPCFQFxhESgHDCcjAKAzVoKaU/h7o4BKMj6BEeDF6A1LSA5ZrKHQ584UvErKvhkw2gj+mphnpDId2NTWCuZTnZcFTaoBrdCAvR8xSrT0dhe8coa8ijEXO3G2K47BPB1+Uzm13YTno9sz8TQzsFBSXMS05wPhY8//GbWBznsdAXS7iNuigkAoZVt7FQG0F9h5vKPq9G+HtjgRfbdQAUrCfnymM4TcYl3ITHK6ixpJeGEEIj8A7RaCi8Ax8X+ODw1SCIR0Jgu3DyyXRza1lnuzXq8fhT6JykkRdX6aX6KCS8yHQIDAQAB",
+  "id": "lanmbpkmblcijblbllbikenpnceidmpj"
+}

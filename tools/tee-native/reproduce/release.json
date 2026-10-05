@@ -1,0 +1,21 @@
+{
+  "status": "**Release candidate.** Hardware qualification and deployment are pending. Until this release is deployed, the live service runs the previous one (extension 1.2.1, enclave PCR0 `f866e1cf…`), which was built from source that is not published.",
+  "extension": {
+    "id": "lanmbpkmblcijblbllbikenpnceidmpj",
+    "version": "1.2.2",
+    "sourceRevision": "pending",
+    "sha256": "pending"
+  },
+  "enclave": {
+    "sourceEpoch": 1791158400,
+    "pcrs": [
+      "ef13f7a593fbf5881087f5e96c9dee75597b9780c0cfe953638d79d3a226ceadfbbe0390098a5e1a2d9306c8f625f30c",
+      "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
+      "4c39fefdd473226957d2ea4e688dce321eb9b5930af28008a4b34cc61e1c1846a565458ff2afa2f43a0f4220e37c9b6a"
+    ],
+    "eifSha256": "d8b80bc5479567b06edaee4bf38945f0dc1ecf9d14e2df9d993d9503e6ccbcf6"
+  },
+  "attestationWasm": {
+    "sha256": "132fd8b3d6178f6bcb28291501f733e518fa644afc2a52d59003ea415494c19f"
+  }
+}

@@ -1,0 +1,158 @@
+{
+  "format": "pines-tee-native-policy-set-v1",
+  "context": {
+    "application": "pines",
+    "chain": 4663,
+    "revision": "tee-v1-20261004",
+    "verificationEpoch": "pines-tee-v1-20261004",
+    "protocolVersion": "pines-tee-native-v1",
+    "trustPolicyVersion": 1,
+    "deploymentHash": "cac8f477c5ec123a0e3fd188890ed54a1e1b57ebffa56c78587e453b9239002c"
+  },
+  "providers": [
+    {
+      "id": "chatgpt",
+      "schema": {
+        "schemaId": "pines.chatgpt.tee.native",
+        "version": 4,
+        "digest": "sha256:21d9bee1bbd37da79dc6afc9b6664b53a7cf520d0ee2007696bc655212318a47"
+      },
+      "inventorySha256": "b61b8210648c88d6dcdad7c01a4d3e895fcfb8f0c09af157d6e9db4ab64e5ebc",
+      "policy": {
+        "profile": "pines.chatgpt.tee.native.nitro.v1",
+        "admissionEnabled": true,
+        "providerQualified": true,
+        "clockQualified": true,
+        "lifecycleQualified": true,
+        "measurements": [
+          "ef13f7a593fbf5881087f5e96c9dee75597b9780c0cfe953638d79d3a226ceadfbbe0390098a5e1a2d9306c8f625f30c"
+        ],
+        "pcrTuples": [
+          [
+            "ef13f7a593fbf5881087f5e96c9dee75597b9780c0cfe953638d79d3a226ceadfbbe0390098a5e1a2d9306c8f625f30c",
+            "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
+            "4c39fefdd473226957d2ea4e688dce321eb9b5930af28008a4b34cc61e1c1846a565458ff2afa2f43a0f4220e37c9b6a"
+          ]
+        ],
+        "simulationAllowed": false,
+        "debugAllowed": false,
+        "providerHost": "chatgpt.com",
+        "providerPort": 443,
+        "channelVsockPort": 8000,
+        "providerEgressVsockPort": 8001,
+        "parentCid": 3,
+        "limits": {
+          "maxSentBytes": 8192,
+          "maxRecvBytes": 65536,
+          "maxHeaderBytes": 8192,
+          "maxBodyBytes": 49152,
+          "maxJsonDepth": 32,
+          "maxRecvRecords": 1024,
+          "sessionTimeoutMs": 120000,
+          "protocolBytesPerDirection": 67108864
+        },
+        "verificationEpoch": "pines-tee-v1-20261004",
+        "trustPolicyVersion": 1,
+        "revokedBootIds": [],
+        "revokedWorkerIds": [],
+        "revokedMeasurements": []
+      }
+    },
+    {
+      "id": "claude",
+      "schema": {
+        "schemaId": "pines.claude.tee.native",
+        "version": 1,
+        "digest": "sha256:853b4e26195f81837da924292b51b9ce9e1e8feec1380174f25281fb4fb51699"
+      },
+      "inventorySha256": "d559b5e6dc2e7a55aa0f3ec89efab0acf9a18567b0484ee822aaf2cf8e2e627d",
+      "policy": {
+        "profile": "pines.claude.tee.native.nitro.v1",
+        "admissionEnabled": true,
+        "providerQualified": true,
+        "clockQualified": true,
+        "lifecycleQualified": true,
+        "measurements": [
+          "ef13f7a593fbf5881087f5e96c9dee75597b9780c0cfe953638d79d3a226ceadfbbe0390098a5e1a2d9306c8f625f30c"
+        ],
+        "pcrTuples": [
+          [
+            "ef13f7a593fbf5881087f5e96c9dee75597b9780c0cfe953638d79d3a226ceadfbbe0390098a5e1a2d9306c8f625f30c",
+            "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
+            "4c39fefdd473226957d2ea4e688dce321eb9b5930af28008a4b34cc61e1c1846a565458ff2afa2f43a0f4220e37c9b6a"
+          ]
+        ],
+        "simulationAllowed": false,
+        "debugAllowed": false,
+        "providerHost": "claude.ai",
+        "providerPort": 443,
+        "channelVsockPort": 8000,
+        "providerEgressVsockPort": 8002,
+        "parentCid": 3,
+        "limits": {
+          "maxSentBytes": 8192,
+          "maxRecvBytes": 65536,
+          "maxHeaderBytes": 8192,
+          "maxBodyBytes": 49152,
+          "maxJsonDepth": 32,
+          "maxRecvRecords": 1024,
+          "sessionTimeoutMs": 120000,
+          "protocolBytesPerDirection": 67108864
+        },
+        "verificationEpoch": "pines-tee-v1-20261004",
+        "trustPolicyVersion": 1,
+        "revokedBootIds": [],
+        "revokedWorkerIds": [],
+        "revokedMeasurements": []
+      }
+    },
+    {
+      "id": "grok",
+      "schema": {
+        "schemaId": "pines.grok.tee.native",
+        "version": 1,
+        "digest": "sha256:69870e59cf44ecd76114f3f35c93de33991edfab6674702381754d920b2adb8b"
+      },
+      "inventorySha256": "a8bdac8b88d07969136beb277031cc93c0233a08b4d82ea57046e3870c358271",
+      "policy": {
+        "profile": "pines.grok.tee.native.nitro.v1",
+        "admissionEnabled": true,
+        "providerQualified": true,
+        "clockQualified": true,
+        "lifecycleQualified": true,
+        "measurements": [
+          "ef13f7a593fbf5881087f5e96c9dee75597b9780c0cfe953638d79d3a226ceadfbbe0390098a5e1a2d9306c8f625f30c"
+        ],
+        "pcrTuples": [
+          [
+            "ef13f7a593fbf5881087f5e96c9dee75597b9780c0cfe953638d79d3a226ceadfbbe0390098a5e1a2d9306c8f625f30c",
+            "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
+            "4c39fefdd473226957d2ea4e688dce321eb9b5930af28008a4b34cc61e1c1846a565458ff2afa2f43a0f4220e37c9b6a"
+          ]
+        ],
+        "simulationAllowed": false,
+        "debugAllowed": false,
+        "providerHost": "grok.com",
+        "providerPort": 443,
+        "channelVsockPort": 8000,
+        "providerEgressVsockPort": 8003,
+        "parentCid": 3,
+        "limits": {
+          "maxSentBytes": 8192,
+          "maxRecvBytes": 65536,
+          "maxHeaderBytes": 8192,
+          "maxBodyBytes": 49152,
+          "maxJsonDepth": 32,
+          "maxRecvRecords": 1024,
+          "sessionTimeoutMs": 120000,
+          "protocolBytesPerDirection": 67108864
+        },
+        "verificationEpoch": "pines-tee-v1-20261004",
+        "trustPolicyVersion": 1,
+        "revokedBootIds": [],
+        "revokedWorkerIds": [],
+        "revokedMeasurements": []
+      }
+    }
+  ]
+}

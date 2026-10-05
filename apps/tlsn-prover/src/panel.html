@@ -1,0 +1,60 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pines Verifier</title><link rel="stylesheet" href="panel.css"></head>
+<body><main class="panel" data-view="boot">
+<header class="brand"><svg class="pine" viewBox="0 0 24 25" aria-hidden="true"><path d="M12 11 22 25H2z"/><path d="M12 0 22 14H2z"/></svg><span class="word">pines verifier</span></header>
+
+<section class="view view-start" aria-labelledby="start-title">
+<div class="hero" aria-hidden="true">
+  <span class="hero-grid"></span>
+  <span class="tile tile-chatgpt"><img src="art/app-chatgpt.png" alt=""></span>
+  <span class="tile tile-claude"><img src="art/app-claude.png" alt=""></span>
+  <span class="tile tile-grok"><img src="art/app-grok.png" alt=""></span>
+  <span class="character"><video src="art/pines-member.mp4" poster="art/pines-member-poster.webp" width="260" height="232" autoplay muted loop playsinline disablepictureinpicture preload="auto"></video></span>
+</div>
+<h1 id="start-title">Prove your paid ChatGPT, Claude or Grok subscription to claim drops on Pines</h1>
+<ol class="points">
+  <li><span class="point-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5M12 14.5v2"/></svg></span><b>Open your AI account</b></li>
+  <li><span class="point-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg></span><b>Review what Pines receives</b></li>
+  <li><span class="point-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 5.8v5.4c0 4.4 2.9 8.2 7 9.8 4.1-1.6 7-5.4 7-9.8V5.8L12 3Z"/><path d="m8.8 12.2 2.2 2.2 4.2-4.4"/></svg></span><b>Share and get verified</b></li>
+</ol>
+<div class="actions">
+  <p class="start-hint">Press Claim on any drop at pines.family to start verification.</p>
+  <p class="foot">Secured by zkTLS</p>
+</div>
+</section>
+
+<section class="view view-connecting">
+  <span class="connecting-orb" id="connecting-orb"></span>
+  <p>Connecting to the extension…</p>
+</section>
+
+<section class="view view-run" aria-labelledby="heading">
+<div class="run-head">
+  <span class="run-tile"><img id="provider-logo" src="art/app-chatgpt.png" alt=""><span class="run-badge" id="run-badge" hidden></span></span>
+  <h1 id="heading">ChatGPT verification</h1>
+  <p id="description" hidden></p>
+  <p id="failure-code" class="meta" hidden></p>
+  <p id="receipt-failure" hidden></p>
+  <p id="retry-countdown" hidden></p>
+</div>
+<ol id="progress" class="tasks" aria-label="Verification progress"></ol>
+<section id="disclosure" class="review" aria-label="What Pines receives">
+  <dl class="rows" id="shared-rows"></dl>
+  <p class="review-note" id="sharing"></p>
+  <details><summary>See everything that’s shared<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg></summary><pre id="preview"></pre></details>
+</section>
+<section id="capture" class="capture" hidden><p id="capture-help"></p><button id="capture-start" class="button secondary">Use this provider tab</button></section>
+<p id="privacy-note" class="note" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 5.8v5.4c0 4.4 2.9 8.2 7 9.8 4.1-1.6 7-5.4 7-9.8V5.8L12 3Z"/><path d="m8.8 12.2 2.2 2.2 4.2-4.4"/></svg>Your login stays hidden from Pines.</p>
+<footer class="run-foot">
+<div class="actions run-actions">
+  <button class="button primary" id="allow-access" hidden>Allow provider access</button>
+  <button class="button primary" id="approve" hidden>Share and verify</button>
+  <button class="button primary" id="continue" hidden>Continue to Pines<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+  <button class="button primary" id="recover" hidden>Return to Pines<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button>
+  <button class="button secondary" id="cancel" hidden>Cancel</button>
+  <p class="help" id="help" role="alert"></p>
+</div>
+<p class="meta" id="meta"></p>
+</footer>
+</section>
+<p class="visually-hidden" id="status" role="status" aria-live="polite"></p>
+</main><script type="module" src="panel.js"></script></body></html>

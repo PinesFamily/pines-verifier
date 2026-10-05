@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "qualified": true,
+  "source": "Chromium DevTools structural review of a signed-in session, 2026-10-04; identity encoding requested and uncompressed response observed. No response values exported.",
+  "observationSha256": "5d0c136b62559c1f46bc7c5c907af0612a5b3ece5e72291113eb80e907ea683a",
+  "observedAt": "2026-10-04T03:07:49.159Z",
+  "credentialResponseHeaders": [
+    "set-cookie",
+    "x-oai-is-update"
+  ],
+  "review": "Body properties are account identifiers, contact/plan and usage/credit state, fully disclosed only inside the measured enclave. Opaque x-oai-is-update is conservatively secret; complete values must be redacted. Unobserved non-null shapes and unknown names refuse.",
+  "responseHeaders": [
+    "cf-cache-status",
+    "cf-ray",
+    "connection",
+    "content-length",
+    "content-type",
+    "cross-origin-opener-policy",
+    "date",
+    "nel",
+    "referrer-policy",
+    "report-to",
+    "server",
+    "set-cookie",
+    "strict-transport-security",
+    "transfer-encoding",
+    "x-content-type-options",
+    "x-oai-is-update",
+    "x-oai-request-id",
+    "x-openai-proxy-wasm"
+  ],
+  "body": {
+    "type": "object",
+    "properties": {
+      "user_id": {
+        "type": "string",
+        "maxBytes": 29
+      },
+      "account_id": {
+        "type": "string",
+        "maxBytes": 64
+      },
+      "email": {
+        "type": "string",
+        "maxBytes": 512
+      },
+      "plan_type": {
+        "type": "string",
+        "maxBytes": 16
+      },
+      "rate_limit": {
+        "type": "object",
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "limit_reached": {
+            "type": "boolean"
+          },
+          "primary_window": {
+            "type": "object",
+            "properties": {
+              "used_percent": {
+                "type": "number"
+              },
+              "limit_window_seconds": {
+                "type": "number"
+              },
+              "reset_after_seconds": {
+                "type": "number"
+              },
+              "reset_at": {
+                "type": "number"
+              }
+            }
+          },
+          "secondary_window": {
+            "type": "null",
+            "nullable": true
+          }
+        }
+      },
+      "code_review_rate_limit": {
+        "type": "null",
+        "nullable": true
+      },
+      "additional_rate_limits": {
+        "type": "null",
+        "nullable": true
+      },
+      "model_usage": {
+        "type": "object",
+        "properties": {
+          "gpt-6-astra": {
+            "type": "object",
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "available_at": {
+                "type": "null",
+                "nullable": true
+              },
+              "credits_would_enable": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      },
+      "credits": {
+        "type": "object",
+        "properties": {
+          "has_credits": {
+            "type": "boolean"
+          },
+          "unlimited": {
+            "type": "boolean"
+          },
+          "overage_limit_reached": {
+            "type": "boolean"
+          },
+          "balance": {
+            "type": "string",
+            "maxBytes": 128
+          },
+          "approx_local_messages": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          },
+          "approx_cloud_messages": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      "spend_control": {
+        "type": "object",
+        "properties": {
+          "reached": {
+            "type": "boolean"
+          },
+          "individual_limit": {
+            "type": "null",
+            "nullable": true
+          }
+        }
+      },
+      "rate_limit_reached_type": {
+        "type": "null",
+        "nullable": true
+      },
+      "promo": {
+        "type": "null",
+        "nullable": true
+      },
+      "rate_limit_reset_credits": {
+        "type": "object",
+        "properties": {
+          "available_count": {
+            "type": "number"
+          },
+          "applicable_available_count": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "required": [
+      "user_id",
+      "plan_type"
+    ]
+  },
+  "paidPlanReview": {
+    "observedAt": "2026-10-04T09:36:28Z",
+    "planType": "promax",
+    "bodyBytes": 1101,
+    "structureSha256": "96ce7443cf098c39c90fb480c94fdd1ebef790c542b81f4e17910c3c03c5dcdf",
+    "scope": "Complete identity-encoded response structure and header inventory match; only the explicit plan predicate expands."
+  }
+}

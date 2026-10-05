@@ -1,0 +1,13 @@
+# The AWS Nitro Enclaves CLI that turns the image into an EIF and reports its PCRs. PCR1 depends on the kernel and init
+# blobs this package ships, so the base image and package versions are pinned and the blobs are checked by hash.
+FROM public.ecr.aws/amazonlinux/amazonlinux@sha256:12052e9b5d3fd85769abbdd863dd038e1890c9ace31d5fdbe1afa78eda97d061
+RUN dnf install -y --allowerasing aws-nitro-enclaves-cli-1.5.0-0.amzn2023 aws-nitro-enclaves-cli-devel-1.5.0-0.amzn2023 \
+ && dnf clean all && rm -rf /var/cache/dnf
+RUN cd /usr/share/nitro_enclaves/blobs && sha256sum --check --strict <<'SUMS'
+210eda749c1308eb60671a579d24db5e8a3477cb7a247cf313c286b09fe2d857  bzImage
+9378dea490ed6c698c3d23b346ed08e49dae52d74a59cee2673b8a7b1951fc5b  bzImage.config
+10d7d9dd205d4596d45997d17434f26207525f129d171a51f9859b1af9f4a07a  cmdline
+c4acb866e8925c171b43517f3a88a6989f5a2da3a6d3e6594f75bedc6d116a27  init
+e57bb1779b348da7eae118a8e0a034d2aa4c28205c07db07dea8285ff206bb69  linuxkit
+6bd2b09422c2f2f58c6ecf1cfd55216bea9b99a6d591261a9eca40027291316b  nsm.ko
+SUMS

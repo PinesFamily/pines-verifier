@@ -1,0 +1,29 @@
+{
+  "name": "@pines/tlsn-prover",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22.18"},
+  "scripts": {
+    "build": "node build.mjs",
+    "release": "node release.mjs",
+    "build:capture": "node capture/build.mjs",
+    "measure:capture": "node capture/measure.mjs",
+    "probe:claude": "node capture/claude-probe.mjs",
+    "probe:grok": "node capture/grok-probe.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:browser": "node test/browser.mjs",
+    "test:permissions": "PINES_TLSN_PROVIDER=chatgpt PINES_TLSN_CHATGPT_IDENTITY=1 PINES_TLSN_CLAUDE=1 PINES_TLSN_GROK=1 node build.mjs && node test/permission-browser.mjs",
+    "test:permission-feasibility": "node test/permission-feasibility.mjs",
+    "test:permission-upgrade": "node test/permission-upgrade.mjs",
+    "test:fleet": "node test/fleet-browser.mjs",
+    "test:app": "node test/browser.mjs --app",
+    "test:capture": "node test/capture-browser.mjs",
+    "test:private": "node test/browser.mjs --private",
+    "measure:provider": "node test/browser.mjs --provider",
+    "test:claims": "node test/browser.mjs --claims",
+    "preview": "node preview.mjs"
+  },
+  "dependencies": {"thinking-orbs": "0.3.2", "tlsn-wasm": "0.1.0-alpha.15"},
+  "devDependencies": {"esbuild": "0.28.2", "playwright": "1.63.0", "typescript": "6.0.3"}
+}

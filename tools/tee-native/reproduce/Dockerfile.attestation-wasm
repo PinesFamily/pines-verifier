@@ -1,0 +1,11 @@
+# Toolchain for the attestation validator: the enclave image's pinned Rust, its wasm32 target and wasm-bindgen 0.2.104.
+FROM rust:1.95.0-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1
+RUN rustup target add wasm32-unknown-unknown --toolchain 1.95.0
+# ring compiles C for wasm32 with clang; Debian bookworm's clang 14 at an exact version (install fails if it moves).
+RUN apt-get update && apt-get install -y --no-install-recommends clang-14=1:14.0.6-12 llvm-14=1:14.0.6-12 \
+ && rm -rf /var/lib/apt/lists/*
+ENV CC_wasm32_unknown_unknown=clang-14 AR_wasm32_unknown_unknown=llvm-ar-14
+RUN curl -sSfL https://github.com/wasm-bindgen/wasm-bindgen/releases/download/0.2.104/wasm-bindgen-0.2.104-x86_64-unknown-linux-musl.tar.gz -o /tmp/bindgen.tgz \
+ && echo '9553740907c2c1008f9a44bb00ed1f5b39ffc55d9d331581b5aebc891a4b772f  /tmp/bindgen.tgz' | sha256sum --check --strict \
+ && tar -xzf /tmp/bindgen.tgz -C /tmp && install -m 0755 /tmp/wasm-bindgen-0.2.104-x86_64-unknown-linux-musl/wasm-bindgen /usr/local/bin/ \
+ && rm -rf /tmp/bindgen.tgz /tmp/wasm-bindgen-0.2.104-x86_64-unknown-linux-musl

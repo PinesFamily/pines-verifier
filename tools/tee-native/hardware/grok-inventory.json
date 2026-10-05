@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "qualified": true,
+  "source": "Chromium DevTools structure review of a signed-in session, 2026-10-05; complete headers and identity-encoded uncompressed response. Raw values never exported.",
+  "observationSha256": "414ae93e0929e90f4bb3fa3c0c78ae10dc776b911a110748e27b1b0e6c53e9d5",
+  "observedAt": "2026-10-05T00:18:01.711Z",
+  "credentialResponseHeaders": [
+    "set-cookie"
+  ],
+  "review": "Complete body disclosed only inside the measured enclave; exact observed property/type inventory, bounded strings/arrays, unknown names and unobserved non-null shapes refuse. Set-Cookie values remain hidden; HTTP/1.1 framing headers are allowed. Includes the previously reviewed empty legacy x object; current observation covers Stripe subscription fields.",
+  "responseHeaders": [
+    "alt-svc",
+    "cf-cache-status",
+    "cf-ray",
+    "connection",
+    "content-length",
+    "content-type",
+    "date",
+    "priority",
+    "server",
+    "server-timing",
+    "set-cookie",
+    "speculation-rules",
+    "strict-transport-security",
+    "transfer-encoding",
+    "vary",
+    "x-trace-id"
+  ],
+  "body": {
+    "type": "object",
+    "properties": {
+      "subscriptions": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "object",
+          "properties": {
+            "stripe": {
+              "type": "object",
+              "properties": {
+                "subscriptionId": {
+                  "type": "string",
+                  "maxBytes": 128
+                },
+                "invoiceId": {
+                  "type": "string",
+                  "maxBytes": 128
+                },
+                "productId": {
+                  "type": "string",
+                  "maxBytes": 128
+                },
+                "currentPeriodEnd": {
+                  "type": "string",
+                  "maxBytes": 128
+                },
+                "cancelAtPeriodEnd": {
+                  "type": "boolean"
+                },
+                "subscriptionType": {
+                  "type": "string",
+                  "maxBytes": 128
+                },
+                "currency": {
+                  "type": "string",
+                  "maxBytes": 128
+                },
+                "priceId": {
+                  "type": "string",
+                  "maxBytes": 128
+                }
+              }
+            },
+            "xaiUserId": {
+              "type": "string",
+              "maxBytes": 36
+            },
+            "tier": {
+              "type": "string",
+              "maxBytes": 128
+            },
+            "status": {
+              "type": "string",
+              "maxBytes": 128
+            },
+            "createTime": {
+              "type": "string",
+              "maxBytes": 128
+            },
+            "modTime": {
+              "type": "string",
+              "maxBytes": 128
+            },
+            "billingInterval": {
+              "type": "string",
+              "maxBytes": 128
+            },
+            "billingPeriodEnd": {
+              "type": "string",
+              "maxBytes": 128
+            },
+            "cancelAtPeriodEnd": {
+              "type": "boolean"
+            },
+            "futureOffers": {
+              "type": "array",
+              "maxItems": 0,
+              "items": {
+                "type": "null",
+                "nullable": true
+              }
+            },
+            "billingSystem": {
+              "type": "string",
+              "maxBytes": 128
+            },
+            "x": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "required": [
+            "xaiUserId",
+            "tier",
+            "status"
+          ]
+        }
+      },
+      "dominantPlan": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "string",
+            "maxBytes": 128
+          },
+          "surfaceNames": {
+            "type": "object",
+            "properties": {
+              "SURFACE_ANALYTICS": {
+                "type": "string",
+                "maxBytes": 128
+              },
+              "SURFACE_CURSOR": {
+                "type": "string",
+                "maxBytes": 128
+              },
+              "SURFACE_DISPLAY": {
+                "type": "string",
+                "maxBytes": 128
+              },
+              "SURFACE_GATEWAY_HEADER": {
+                "type": "string",
+                "maxBytes": 128
+              },
+              "SURFACE_GROWTHBOOK": {
+                "type": "string",
+                "maxBytes": 128
+              },
+              "SURFACE_INTERCOM": {
+                "type": "string",
+                "maxBytes": 128
+              },
+              "SURFACE_JWT": {
+                "type": "string",
+                "maxBytes": 128
+              },
+              "SURFACE_KAFKA": {
+                "type": "string",
+                "maxBytes": 128
+              },
+              "SURFACE_WEBHOOK": {
+                "type": "string",
+                "maxBytes": 128
+              }
+            }
+          }
+        }
+      }
+    },
+    "required": [
+      "subscriptions"
+    ]
+  }
+}

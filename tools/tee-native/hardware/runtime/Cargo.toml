@@ -1,0 +1,18 @@
+[package]
+name = "pines-nitro-runtime"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+aws-nitro-enclaves-nsm-api = "=0.5.2"
+tokio-vsock = "=0.7.2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_cbor = "=0.11.2"
+serde_bytes = "=0.11.19"
+base64 = "=0.22.1"
+libc = "0.2"

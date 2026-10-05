@@ -1,0 +1,433 @@
+{
+  "version": 1,
+  "qualified": true,
+  "source": "Chromium DevTools structure review of a signed-in session, 2026-10-05; complete headers and identity-encoded uncompressed response. Raw values never exported.",
+  "observationSha256": "d9c401aae51ab1f0d0b779ccb36c85f2a198e8d231bb51af60775877ec3d5e49",
+  "observedAt": "2026-10-05T00:17:58.671Z",
+  "credentialResponseHeaders": [
+    "set-cookie"
+  ],
+  "review": "Complete body disclosed only inside the measured enclave; exact observed property/type inventory, bounded strings/arrays, unknown names and unobserved non-null shapes refuse. Set-Cookie values remain hidden; HTTP/1.1 framing headers are allowed. Exactly one personal paid organization must pass the independent semantic selector.",
+  "responseHeaders": [
+    "alt-svc",
+    "cf-cache-status",
+    "cf-ray",
+    "connection",
+    "content-length",
+    "content-type",
+    "date",
+    "priority",
+    "request-id",
+    "server",
+    "server-timing",
+    "set-cookie",
+    "strict-transport-security",
+    "transfer-encoding",
+    "vary",
+    "x-robots-tag"
+  ],
+  "body": {
+    "type": "array",
+    "maxItems": 64,
+    "items": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "number"
+        },
+        "uuid": {
+          "type": "string",
+          "maxBytes": 36
+        },
+        "name": {
+          "type": "string",
+          "maxBytes": 512
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "claude_console_privacy": {
+              "type": "string",
+              "maxBytes": 128
+            },
+            "allowed_invite_domains": {
+              "type": "null",
+              "nullable": true
+            },
+            "workbench_completion_feedback_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_completion_feedback_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_metrics_logging_enabled": {
+              "type": "boolean"
+            },
+            "claude_code_github_analytics_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_remote_control_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_remote_control_default_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_routines_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_workflows_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_trusted_devices_required": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_penguin_mode_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_quick_web_setup_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_hide_managed_environments": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_disable_anthropic_compute": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_allow_session_pool_moves": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_default_worker_environment_id": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_code_default_worker_pool_id": {
+              "type": "null",
+              "nullable": true
+            },
+            "managed_agents_enabled": {
+              "type": "boolean"
+            },
+            "files_api_enabled": {
+              "type": "boolean"
+            },
+            "skills_api_enabled": {
+              "type": "boolean"
+            },
+            "oc_overage_credit_claimed": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "inline_visualizations_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_omelette_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_academy_inference_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_academy_personalization_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_skill_plugins_scanning_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_operon_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "frontier_services_data_use_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "lti_course_projects_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_integration_sharing_enabled": {
+              "type": "boolean"
+            },
+            "claude_ai_chat_sharing_enabled": {
+              "type": "boolean"
+            },
+            "claude_ai_chat_external_sharing_enabled": {
+              "type": "boolean"
+            },
+            "claude_ai_ccr_sharing_enabled": {
+              "type": "boolean"
+            },
+            "claude_ai_skill_sharing_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_skill_sharing_org_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_skill_sharing_group_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_skill_creation_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_skill_publish_policy": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_skill_publish_policy_effective": {
+              "type": "null",
+              "nullable": true
+            },
+            "claude_ai_skill_publish_open_available": {
+              "type": "null",
+              "nullable": true
+            },
+            "connector_social_proof": {
+              "type": "null",
+              "nullable": true
+            },
+            "batches_download_ui_visibility": {
+              "type": "string",
+              "maxBytes": 128
+            },
+            "batches_download_ui_enabled_workspace_ids": {
+              "type": "array",
+              "maxItems": 0,
+              "items": {
+                "type": "null",
+                "nullable": true
+              }
+            },
+            "default_workspace_settings": {
+              "type": "object",
+              "properties": {
+                "enable_api_keys": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "api_key_creation_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "sampling_restriction": {
+              "type": "null",
+              "nullable": true
+            },
+            "work_across_apps_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "dramatic_shrimp_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "cobalt_plinth_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "pewter_finch_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "is_desktop_extension_allowlist_enabled": {
+              "type": "null",
+              "nullable": true
+            },
+            "account_session_duration_seconds": {
+              "type": "null",
+              "nullable": true
+            },
+            "vcs_connections": {
+              "type": "null",
+              "nullable": true
+            },
+            "disabled_admin_request_types": {
+              "type": "null",
+              "nullable": true
+            },
+            "member_usage_dashboard_visible": {
+              "type": "null",
+              "nullable": true
+            },
+            "system_preferences_prompt": {
+              "type": "null",
+              "nullable": true
+            }
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "maxBytes": 128
+          }
+        },
+        "parent_organization_uuid": {
+          "type": "null",
+          "nullable": true
+        },
+        "rate_limit_tier": {
+          "type": "string",
+          "maxBytes": 128
+        },
+        "billing_type": {
+          "type": "string",
+          "maxBytes": 128
+        },
+        "free_credits_status": {
+          "type": "string",
+          "maxBytes": 128
+        },
+        "data_retention": {
+          "type": "string",
+          "maxBytes": 128
+        },
+        "api_disabled_reason": {
+          "type": "null",
+          "nullable": true
+        },
+        "api_disabled_until": {
+          "type": "null",
+          "nullable": true
+        },
+        "created_at": {
+          "type": "string",
+          "maxBytes": 128
+        },
+        "billable_usage_paused_until": {
+          "type": "null",
+          "nullable": true
+        },
+        "raven_type": {
+          "type": "null",
+          "nullable": true
+        },
+        "rate_limit_upsell": {
+          "type": "null",
+          "nullable": true
+        },
+        "merchant_of_record": {
+          "type": "string",
+          "maxBytes": 128
+        },
+        "claude_ai_bootstrap_models_config": {
+          "type": "null",
+          "nullable": true
+        },
+        "has_icon": {
+          "type": "boolean"
+        },
+        "monitoring_notice": {
+          "type": "null",
+          "nullable": true
+        },
+        "is_workbench_cmek_blocked": {
+          "type": "boolean"
+        },
+        "external_mapping": {
+          "type": "null",
+          "nullable": true
+        },
+        "visibility_status": {
+          "type": "null",
+          "nullable": true
+        },
+        "is_internal_org": {
+          "type": "boolean"
+        },
+        "home_stripe_account_region": {
+          "type": "string",
+          "maxBytes": 128
+        },
+        "subscription_pause": {
+          "type": "null",
+          "nullable": true
+        },
+        "billing_issue": {
+          "type": "null",
+          "nullable": true
+        },
+        "analytics_subscription_plan": {
+          "type": "string",
+          "maxBytes": 128
+        },
+        "access_block": {
+          "type": "null",
+          "nullable": true
+        },
+        "subscription_management": {
+          "type": "null",
+          "nullable": true
+        },
+        "plan_display_name": {
+          "type": "null",
+          "nullable": true
+        },
+        "plan_display_label": {
+          "type": "null",
+          "nullable": true
+        },
+        "plan_offer_copy": {
+          "type": "null",
+          "nullable": true
+        },
+        "has_hosted_code_environments": {
+          "type": "boolean"
+        },
+        "updated_at": {
+          "type": "string",
+          "maxBytes": 128
+        },
+        "active_flags": {
+          "type": "array",
+          "maxItems": 0,
+          "items": {
+            "type": "null",
+            "nullable": true
+          }
+        },
+        "data_retention_periods": {
+          "type": "null",
+          "nullable": true
+        },
+        "member_file_deletion_blocked_by_retention": {
+          "type": "null",
+          "nullable": true
+        },
+        "data_retention_min_duration_days": {
+          "type": "null",
+          "nullable": true
+        }
+      },
+      "required": [
+        "uuid",
+        "capabilities",
+        "parent_organization_uuid",
+        "rate_limit_tier",
+        "raven_type"
+      ]
+    }
+  }
+}

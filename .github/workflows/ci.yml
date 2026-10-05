@@ -1,33 +1,29 @@
-name: CI
+name: Reproduce
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  extension:
+    name: Extension package (ZIP)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm ci --ignore-scripts
-      - run: npm test
-      - run: npm run registry:check
-      - run: npx playwright install --with-deps chromium
-      - name: Native capture with a synthetic HTTPS origin
-        run: npm run test:capture
-      - run: npm run build
-      - name: Reproducible release archives (two builds, identical bytes)
-        run: |
-          set -euo pipefail
-          node release.mjs --allow-dirty
-          first=$(sha256sum release/*.zip)
-          node release.mjs --allow-dirty
-          test "$first" = "$(sha256sum release/*.zip)"
+      - name: Rebuild the package in a pinned container and compare its SHA-256 with release.json
+        run: tools/tee-native/reproduce/extension.sh
+
+  attestation-wasm:
+    name: Attestation validator (WebAssembly)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild the validator in a pinned container and compare with release/SHA256SUMS
+        run: tools/tee-native/reproduce/attestation-wasm.sh
