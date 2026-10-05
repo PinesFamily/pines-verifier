@@ -3,8 +3,8 @@
   "extension": {
     "id": "lanmbpkmblcijblbllbikenpnceidmpj",
     "version": "1.2.2",
-    "sourceRevision": "pending",
-    "sha256": "pending"
+    "sourceRevision": "06cc73fe97b17a9816fb77d9404f96794bb51f63",
+    "sha256": "87c4599cf98942b39ca8e75d9ffc6f1c6a468e36094a2caffd9c5b2b98898f9d"
   },
   "enclave": {
     "sourceEpoch": 1791158400,

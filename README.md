@@ -63,7 +63,7 @@ Compare PCRs, which is also what an attestation reports.
 
 | | |
 |---|---|
-| Extension | Pines Verifier **1.2.2**, id `lanmbpkmblcijblbllbikenpnceidmpj`, ZIP SHA-256 `pending` |
+| Extension | Pines Verifier **1.2.2**, id `lanmbpkmblcijblbllbikenpnceidmpj`, ZIP SHA-256 `87c4599cf98942b39ca8e75d9ffc6f1c6a468e36094a2caffd9c5b2b98898f9d` |
 | Enclave PCR0 | `ef13f7a593fbf5881087f5e96c9dee75597b9780c0cfe953638d79d3a226ceadfbbe0390098a5e1a2d9306c8f625f30c` |
 | Enclave PCR1 | `4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493` |
 | Enclave PCR2 | `4c39fefdd473226957d2ea4e688dce321eb9b5930af28008a4b34cc61e1c1846a565458ff2afa2f43a0f4220e37c9b6a` |
