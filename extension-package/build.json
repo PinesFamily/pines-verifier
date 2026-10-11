@@ -10,7 +10,7 @@
     "http://127.0.0.1:5180"
   ],
   "verifierOrigin": "https://id.pines.family",
-  "verifierRevision": "tee-v2-sydney-20261006",
+  "verifierRevision": "tee-v3-20261012",
   "verifierPolicy": {
     "host": "*.verifier.pines.family",
     "legacy": [
@@ -23,7 +23,7 @@
   ],
   "testBuild": false,
   "application": "pines",
-  "chainId": 4663,
+  "chainId": 8453,
   "captureProvider": true,
   "tee": {
     "api": "https://id.pines.family/tee",
@@ -33,12 +33,12 @@
       "format": "pines-tee-native-policy-set-v1",
       "context": {
         "application": "pines",
-        "chain": 4663,
-        "revision": "tee-v2-sydney-20261006",
-        "verificationEpoch": "pines-tee-v2-sydney-20261006",
+        "chain": 8453,
+        "revision": "tee-v3-20261012",
+        "verificationEpoch": "pines-tee-v3-20261012",
         "protocolVersion": "pines-tee-native-v2",
         "trustPolicyVersion": 2,
-        "deploymentHash": "cac8f477c5ec123a0e3fd188890ed54a1e1b57ebffa56c78587e453b9239002c"
+        "deploymentHash": "bd755354bbcf69b5832af648114c079c8784b899d38d723e55547541bbe2a8ae"
       },
       "providers": [
         {
@@ -56,13 +56,13 @@
             "clockQualified": true,
             "lifecycleQualified": true,
             "measurements": [
-              "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99"
+              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
             ],
             "pcrTuples": [
               [
-                "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99",
+                "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
                 "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-                "6d68bf7f166ce7869567623a2b90749dfcf939c2e095510ee0102354f5235c566c785c5fe481f5d67c252fec53d2bf51"
+                "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
               ]
             ],
             "simulationAllowed": false,
@@ -86,7 +86,7 @@
               "maxRevealedSentBytes": 1024,
               "protocolBytesPerDirection": 67108864
             },
-            "verificationEpoch": "pines-tee-v2-sydney-20261006",
+            "verificationEpoch": "pines-tee-v3-20261012",
             "trustPolicyVersion": 2,
             "revokedBootIds": [],
             "revokedWorkerIds": [],
@@ -116,13 +116,13 @@
             "clockQualified": true,
             "lifecycleQualified": true,
             "measurements": [
-              "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99"
+              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
             ],
             "pcrTuples": [
               [
-                "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99",
+                "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
                 "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-                "6d68bf7f166ce7869567623a2b90749dfcf939c2e095510ee0102354f5235c566c785c5fe481f5d67c252fec53d2bf51"
+                "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
               ]
             ],
             "simulationAllowed": false,
@@ -146,7 +146,7 @@
               "maxRevealedSentBytes": 1024,
               "protocolBytesPerDirection": 67108864
             },
-            "verificationEpoch": "pines-tee-v2-sydney-20261006",
+            "verificationEpoch": "pines-tee-v3-20261012",
             "trustPolicyVersion": 2,
             "revokedBootIds": [],
             "revokedWorkerIds": [],
@@ -176,13 +176,13 @@
             "clockQualified": true,
             "lifecycleQualified": true,
             "measurements": [
-              "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99"
+              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
             ],
             "pcrTuples": [
               [
-                "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99",
+                "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
                 "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-                "6d68bf7f166ce7869567623a2b90749dfcf939c2e095510ee0102354f5235c566c785c5fe481f5d67c252fec53d2bf51"
+                "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
               ]
             ],
             "simulationAllowed": false,
@@ -206,7 +206,7 @@
               "maxRevealedSentBytes": 1024,
               "protocolBytesPerDirection": 67108864
             },
-            "verificationEpoch": "pines-tee-v2-sydney-20261006",
+            "verificationEpoch": "pines-tee-v3-20261012",
             "trustPolicyVersion": 2,
             "revokedBootIds": [],
             "revokedWorkerIds": [],
@@ -360,13 +360,13 @@
           "clockQualified": true,
           "lifecycleQualified": true,
           "measurements": [
-            "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99"
+            "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
           ],
           "pcrTuples": [
             [
-              "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99",
+              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
               "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-              "6d68bf7f166ce7869567623a2b90749dfcf939c2e095510ee0102354f5235c566c785c5fe481f5d67c252fec53d2bf51"
+              "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
             ]
           ],
           "simulationAllowed": false,
@@ -390,7 +390,7 @@
             "maxRevealedSentBytes": 1024,
             "protocolBytesPerDirection": 67108864
           },
-          "verificationEpoch": "pines-tee-v2-sydney-20261006",
+          "verificationEpoch": "pines-tee-v3-20261012",
           "trustPolicyVersion": 2,
           "revokedBootIds": [],
           "revokedWorkerIds": [],
@@ -552,13 +552,13 @@
           "clockQualified": true,
           "lifecycleQualified": true,
           "measurements": [
-            "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99"
+            "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
           ],
           "pcrTuples": [
             [
-              "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99",
+              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
               "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-              "6d68bf7f166ce7869567623a2b90749dfcf939c2e095510ee0102354f5235c566c785c5fe481f5d67c252fec53d2bf51"
+              "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
             ]
           ],
           "simulationAllowed": false,
@@ -582,7 +582,7 @@
             "maxRevealedSentBytes": 1024,
             "protocolBytesPerDirection": 67108864
           },
-          "verificationEpoch": "pines-tee-v2-sydney-20261006",
+          "verificationEpoch": "pines-tee-v3-20261012",
           "trustPolicyVersion": 2,
           "revokedBootIds": [],
           "revokedWorkerIds": [],
@@ -744,13 +744,13 @@
           "clockQualified": true,
           "lifecycleQualified": true,
           "measurements": [
-            "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99"
+            "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
           ],
           "pcrTuples": [
             [
-              "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99",
+              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
               "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-              "6d68bf7f166ce7869567623a2b90749dfcf939c2e095510ee0102354f5235c566c785c5fe481f5d67c252fec53d2bf51"
+              "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
             ]
           ],
           "simulationAllowed": false,
@@ -774,7 +774,7 @@
             "maxRevealedSentBytes": 1024,
             "protocolBytesPerDirection": 67108864
           },
-          "verificationEpoch": "pines-tee-v2-sydney-20261006",
+          "verificationEpoch": "pines-tee-v3-20261012",
           "trustPolicyVersion": 2,
           "revokedBootIds": [],
           "revokedWorkerIds": [],
@@ -793,12 +793,12 @@
     "disclosurePolicy": "private-headers-gzip-v1",
     "capability": {
       "application": "pines",
-      "chain": 4663,
-      "revision": "tee-v2-sydney-20261006",
-      "verificationEpoch": "pines-tee-v2-sydney-20261006",
+      "chain": 8453,
+      "revision": "tee-v3-20261012",
+      "verificationEpoch": "pines-tee-v3-20261012",
       "protocolVersion": "pines-tee-native-v2",
       "trustPolicyVersion": 2,
-      "deploymentHash": "cac8f477c5ec123a0e3fd188890ed54a1e1b57ebffa56c78587e453b9239002c",
+      "deploymentHash": "bd755354bbcf69b5832af648114c079c8784b899d38d723e55547541bbe2a8ae",
       "protocol": "pines-tee-native-v2",
       "capabilityVersion": 2,
       "claimSigningAvailable": false,
@@ -874,8 +874,15 @@
   "chatgptClaims": false,
   "chatgptIdentity": true,
   "extensionId": "lanmbpkmblcijblbllbikenpnceidmpj",
-  "sourceRevision": "e5b5aa3e9f32cecd0ad5e44556f51292edfe09ee",
+  "sourceRevision": "4a11fa617336fe7ee2cb55300ccebbf84cd8030a",
   "sourceDirty": false,
+  "publicRelease": {
+    "format": "pines-private-headers-public-package-v2",
+    "version": "1.14.0",
+    "policySha256": "f64771bc59a8a824d3f7833a5184ef71c0b811a6e44c5296e60d6bbb2ff11e0f",
+    "builtFromSource": true,
+    "claimSigningEnabled": false
+  },
   "wasmRuntime": {
     "format": "pines-tlsn-wasm-io-v1",
     "upstreamCommit": "47aee45b53e06648c1b2ad3689b367b8c923fdec",
@@ -894,26 +901,5 @@
       "tlsn_wasm_bg.wasm.d.ts": "0a1109f793a267f08fff6ca55c4a7db924ce756ddea5ebb292a88686dac18e37"
     }
   },
-  "wasmSha256": "9b1ceba5196ab608a9d55b5606656e0d5516db557bda3c92727ea9f658810a73",
-  "publicRelease": {
-    "format": "pines-relay-client-public-package-v1",
-    "version": "1.13.14",
-    "releaseSourceRevision": "d2703e7202a32401ef057a0fda1fafe151adb97d",
-    "candidatePackageSha256": "a3940368a785a1b0e421a3bf5cbe70865981926633922e32412b24c40f5eb8a4",
-    "basePackageSha256": "689d97b026bf5352c360694c921cc7054be615e138489b331b2276c2b48bdac5",
-    "qualifiedVersion": "1.13.12",
-    "qualifiedPackageSha256": "c3143066d950678aaa3b8814610bda060b0139e23c583681013a438b434719e5",
-    "measuredSourceRevision": "64a71c1443353f24c6db917e7b80e0adc92b475f",
-    "enclaveSha256": "9288fe2291492f023cd84e47fda63d117f0365cfbce0a5c33530d9c763793bfe",
-    "nativeProofBytesUnchanged": true,
-    "browserWorkerTransportChanged": true,
-    "claimSigningEnabled": false,
-    "transportContinuity": {
-      "prefixSha256": "a982193a9857e3fdebdf80cab2be27070aca5f3ef65ff3223102f4b8a3b57f7f",
-      "suffixSha256": "535998685020da6a61f8bc329389a8aaaa38aa2ec65560e518b962142566d1c4",
-      "oldTransportSha256": "020ed57a1342ba609fd732162a1753b85dcc7c5610a69813f0018903a68db446",
-      "newTransportSha256": "375b023b4d570a1932cfd3b34965922e36d3d2d2311987e72fb1f080c152ac9c",
-      "transportSourceSha256": "d8076457b99a00da2bd2562daf9ce7ece34e224aa29d053f2cd1ff1e206958de"
-    }
-  }
+  "wasmSha256": "9b1ceba5196ab608a9d55b5606656e0d5516db557bda3c92727ea9f658810a73"
 }

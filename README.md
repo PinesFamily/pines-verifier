@@ -73,13 +73,13 @@ build metadata into the file that PCRs do not cover. Compare PCRs, which is also
 
 | | |
 |---|---|
-| Source commit | `64a71c1443353f24c6db917e7b80e0adc92b475f` (build epoch `1791553777`) |
-| Enclave PCR0 | `660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99` |
+| Source commit | `c68f36562a72290f218eda609e4707d2e4bbd01b` (build epoch `1791717379`) |
+| Enclave PCR0 | `af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0` |
 | Enclave PCR1 | `4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493` |
-| Enclave PCR2 | `6d68bf7f166ce7869567623a2b90749dfcf939c2e095510ee0102354f5235c566c785c5fe481f5d67c252fec53d2bf51` |
+| Enclave PCR2 | `edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5` |
 | Attestation validator | `pines_nitro_validation_bg.wasm` SHA-256 `dad876167a51019dcb81495552a48ca20da285487d3a9c2ead43aff288b224bf` |
 
-Release 2026-10-11: Pines Verifier 1.13.14 (package SHA-256 4a8f7a04c072c055783d074e97536978e04c8f8a50d5b12b3a32077d8d503512) updates the browser relay transport and discloses only to an enclave with these unchanged PCRs. Two clean builds of the exported enclave source reproduce the PCRs and the four executables.
+Release 2026-10-11: Pines Verifier 1.14.0 (package SHA-256 77418d9d93095979952cdf120eff51b8054ca306bd9dd2240843277387923298) moves the enclave's audience to Base (chain 8453, revision tee-v3-20261012) on the same host and identity key. Only hardware/context.mjs and protocol.mjs differ from the 1.13.14 enclave's source; the four executables are byte-identical to it. Two clean builds of the exported enclave source reproduce these PCRs and the four executables.
 
 ## TLSNotary and the vendored crates
 

@@ -4,6 +4,7 @@
 Usage:
   local-image-pair.py --context DIR --manifest-sha256 HEX --output NEW_DIR --label LABEL
                       [--eif-name NAME] [--profile NAME] [--build-minutes N] [--nitro-image IMAGE]
+                      [--minimum-free-gib N] [--builder-network host]
 
 DIR is a context made by ../prepare-image.py (or a fixture overlay of one) and HEX the
 SHA-256 of its context-manifest.json, recorded before this runs. Each build uses a fresh,
@@ -37,6 +38,12 @@ def parse():
     p.add_argument('--eif-name', default='pines-normal-redacted.eif')
     p.add_argument('--profile', default='normal-redacted')
     p.add_argument('--build-minutes', type=int, default=60)
+    # Free space required before each build. A measured build peaks at about 3.9 GiB, and the 8 GiB
+    # abort floor below is unchanged, so 12 GiB still leaves the machine more than 8 GiB at the peak.
+    p.add_argument('--minimum-free-gib', type=int, default=15)
+    # The BuildKit container's own network. The default is Docker's bridge; `host` is for a daemon whose
+    # bridge device is missing. Source, extract, package and describe stay --network none.
+    p.add_argument('--builder-network', choices=['host'], default=None)
     p.add_argument('--nitro-image', default=DEFAULT_TOOL_IMAGE)
     a = p.parse_args()
     assert re.fullmatch(r'[a-f0-9]{64}', a.manifest_sha256), 'MANIFEST_SHA256'
@@ -44,6 +51,7 @@ def parse():
     assert re.fullmatch(r'[a-z0-9][a-z0-9.-]{2,60}\.eif', a.eif_name), 'EIF_NAME'
     assert re.fullmatch(r'[a-z0-9-]{3,40}', a.profile), 'PROFILE'
     assert 10 <= a.build_minutes <= 180, 'BUILD_MINUTES'
+    assert 12 <= a.minimum_free_gib <= 15, 'MINIMUM_FREE_GIB'
     assert re.fullmatch(r'sha256:[a-f0-9]{64}|[a-z0-9][a-z0-9._/-]{0,100}(:[A-Za-z0-9._-]{1,64})?', a.nitro_image), 'NITRO_IMAGE'
     return a
 
@@ -300,7 +308,7 @@ result = {'format': 'pines-local-image-pair-v1', 'sourceCommit': MANIFEST['sourc
           'startedAt': stamp(), 'buildStopEpoch': BUILD_STOP, 'cleanupStopEpoch': CLEANUP_STOP, 'runId': RUN_ID,
           'builder': BUILDER, 'builderImage': BUILDER_IMAGE, 'nitroPackagingImage': TOOL_IMAGE, 'eifName': A.eif_name,
           'dockerRoot': str(DOCKER_ROOT),
-          'limits': {'buildCpu': 2, 'buildMemoryBytes': 12 * GIB, 'minimumFreeBeforeEachBuildBytes': 15 * GIB,
+          'builderNetwork': A.builder_network or 'bridge', 'limits': {'buildCpu': 2, 'buildMemoryBytes': 12 * GIB, 'minimumFreeBeforeEachBuildBytes': A.minimum_free_gib * GIB,
                      'diskAbortBytes': 8 * GIB, 'minimumAvailableMemoryBeforeBuildBytes': 18 * GIB, 'memoryAbortBytes': 6 * GIB,
                      'watchedPaths': [str(ROOT), str(DOCKER_ROOT)]}}
 try:
@@ -326,18 +334,20 @@ try:
     builder_create_attempted = True
     run(['docker', 'buildx', 'create', '--name', BUILDER, '--driver', 'docker-container', '--driver-opt',
          f'image={BUILDER_IMAGE},memory=12g,memory-swap=12g,cpu-period=100000,cpu-quota=200000,restart-policy=no,'
-         f'env.PINES_LOCAL_REPRODUCTION={RUN_ID}'], 'builder-create.log')
+         f'env.PINES_LOCAL_REPRODUCTION={RUN_ID}' + (f',network={A.builder_network}' if A.builder_network else '')],
+        'builder-create.log')
     created_builder = True
     run(['docker', 'buildx', 'inspect', BUILDER, '--bootstrap'], 'builder-inspect.log', timeout=300)
     c = json.loads(run(['docker', 'inspect', f'buildx_buildkit_{BUILDER}0'], 'builder-container.json', output=True))[0]
     assert c['HostConfig']['Memory'] == 12 * GIB and c['HostConfig']['MemorySwap'] == 12 * GIB
     assert c['HostConfig']['CpuPeriod'] == 100000 and c['HostConfig']['CpuQuota'] == 200000
     assert c['HostConfig']['RestartPolicy']['Name'] == 'no' and c['Image'] == BUILDER_IMAGE_ID
+    assert c['HostConfig']['NetworkMode'] == (A.builder_network or c['HostConfig']['NetworkMode']), 'BUILDER_NETWORK'
     event('bounded-builder-ready', memoryBytes=c['HostConfig']['Memory'], cpuQuota=c['HostConfig']['CpuQuota'])
     packaged = []
     for n, image in enumerate(IMAGES, 1):
         verify_context(n)
-        assert min(disk().values()) >= 15 * GIB, 'INSUFFICIENT_DISK_BEFORE_BUILD'
+        assert min(disk().values()) >= A.minimum_free_gib * GIB, 'INSUFFICIENT_DISK_BEFORE_BUILD'
         assert available_memory() >= 18 * GIB, 'INSUFFICIENT_MEMORY_BEFORE_BUILD'
         build = ROOT / f'build{n}'
         build.mkdir()

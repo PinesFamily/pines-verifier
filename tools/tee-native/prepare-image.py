@@ -5,7 +5,7 @@ import hashlib, json, shutil, sys, subprocess, os, re
 here = Path(__file__).resolve().parent
 repo = here.parents[1]
 artifact = repo / 'contracts/deployments/production.json'
-expected_deployment = 'cac8f477c5ec123a0e3fd188890ed54a1e1b57ebffa56c78587e453b9239002c'
+expected_deployment = 'bd755354bbcf69b5832af648114c079c8784b899d38d723e55547541bbe2a8ae'
 assert hashlib.sha256(artifact.read_bytes()).hexdigest() == expected_deployment, 'RELEASE_ARTIFACT_DRIFT'
 context_source = (here / 'hardware/context.mjs').read_text()
 assert expected_deployment in context_source, 'MEASURED_CONTEXT_DRIFT'

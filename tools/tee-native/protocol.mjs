@@ -33,7 +33,7 @@ function parentBinding(value) {
 
 export async function issueTicket(clientKey, browserNonce, key, now = Date.now()) {
   const body = {profile: SIMULATION, mode: 'Proxy', attempt: random(), wallet: '0x' + '12'.repeat(20),
-    application: 'pines-local-nonclaimable', chain: 4663, schemaDigest: await schemaDigest(), clientKey,
+    application: 'pines-local-nonclaimable', chain: CONTEXT.chain, schemaDigest: await schemaDigest(), clientKey,
     browserNonce, apiNonce: random(), issuedAt: now, expiresAt: now + 60000, resultExpiresAt: now + 180000, limits: LIMITS};
   return sign(DOMAIN.ticket, body, key);
 }
@@ -60,7 +60,7 @@ export async function checkTicket(ticket, key, profile, now = Date.now(), {allow
   if (disclosure) {check(hardware && typeof t.disclosurePolicy === 'object' && t.disclosurePolicy !== null, 'DISCLOSURE_POLICY'); disclosurePolicy(t.disclosurePolicy);}
   exact(t, ['profile', 'mode', 'attempt', 'wallet', 'application', 'chain', 'schemaDigest', 'clientKey', 'browserNonce', 'apiNonce', 'issuedAt', 'expiresAt', 'resultExpiresAt', 'limits', ...(timing ? SESSION_POLICY_FIELDS : []), ...Object.keys(parent), ...(hardware ? [...Object.keys(CONTEXT).filter(k => !['application','chain'].includes(k)), 'workerId', 'bootId'] : []), ...(disclosure ? ['disclosurePolicy'] : [])]);
   check((hardware || profile === SIMULATION) && t.profile === profile && t.mode === 'Proxy', 'PROFILE');
-  check(t.application === (hardware ? CONTEXT.application : 'pines-local-nonclaimable') && t.chain === 4663 && /^0x[0-9a-f]{40}$/.test(t.wallet), 'TICKET_SCOPE');
+  check(t.application === (hardware ? CONTEXT.application : 'pines-local-nonclaimable') && t.chain === CONTEXT.chain && /^0x[0-9a-f]{40}$/.test(t.wallet), 'TICKET_SCOPE');
   if (hardware) check(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(t.attempt), 'ATTEMPT');
   else unhex(t.attempt, 32);
   for (const key of ['browserNonce', 'apiNonce', 'schemaDigest']) unhex(t[key], 32);
