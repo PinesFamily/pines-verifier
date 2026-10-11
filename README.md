@@ -66,7 +66,7 @@ build metadata into the file that PCRs do not cover. Compare PCRs, which is also
 | Enclave PCR2 | `6d68bf7f166ce7869567623a2b90749dfcf939c2e095510ee0102354f5235c566c785c5fe481f5d67c252fec53d2bf51` |
 | Attestation validator | `pines_nitro_validation_bg.wasm` SHA-256 `dad876167a51019dcb81495552a48ca20da285487d3a9c2ead43aff288b224bf` |
 
-Live: since 2026-10-10 app.pines.family installs Pines Verifier 1.13.13 (package SHA-256 689d97b026bf5352c360694c921cc7054be615e138489b331b2276c2b48bdac5), which discloses only to an enclave with these PCRs. Two clean builds of the exported source reproduce the PCRs and the four executables.
+Release 2026-10-11: Pines Verifier 1.13.14 (package SHA-256 4a8f7a04c072c055783d074e97536978e04c8f8a50d5b12b3a32077d8d503512) updates the browser relay transport and discloses only to an enclave with these unchanged PCRs. Two clean builds of the exported enclave source reproduce the PCRs and the four executables.
 
 ## TLSNotary and the vendored crates
 
