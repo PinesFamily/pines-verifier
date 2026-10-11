@@ -142,6 +142,7 @@ Plausible counts page views without cookies, through this domain, where a site e
 - One claim per provider account per launch, enforced on chain by the nullifier.
 - A drop is open for 3 or 30 days; a staked claim leaves after a 72-hour cooldown.
 - A verification has 120 seconds from start to signed result, your review included.
+- The enclave runs a limited number of verifications at once. When every place is taken, a new one is refused while its channel is set up, before anything is disclosed, and the extension says the verifier is busy; try again shortly.
 
 ## 12. What Pines does not do
 
