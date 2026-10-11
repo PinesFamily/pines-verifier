@@ -31,8 +31,21 @@ for this attempt and not in debug mode, carries exactly the PCRs in the release 
 (`tools/tee-native/nitro.mjs`, `protocol.mjs`); rebuilding this tree yields those PCRs; so the code you read here is the
 code that reads your provider response. The extension package itself (Pines Verifier, id
 `lanmbpkmblcijblbllbikenpnceidmpj`) is installed unpacked from the site and identified by its SHA-256 in the status
-line below; its `config.js` lists the PCRs it pins in plain text. Its two binaries, the attestation validator and the
-TLSNotary prover, rebuild here byte for byte; the package as a whole does not yet.
+line below. It is not yet published in the Chrome Web Store: the listing under the same id carries an earlier,
+pre-enclave version that the site turns away. Its two binaries, the attestation validator and the TLSNotary prover,
+rebuild here byte for byte; the package as a whole does not yet.
+
+**[extension-package/](extension-package)** holds the installed package's `manifest.json` (permissions, content
+security policy, the pages allowed to call it), `config.js` (the PCRs it pins, in plain text) and `build.json`
+verbatim, with `SHA256SUMS` for every file in it, so the package can be reviewed without opening the ZIP and a
+downloaded copy can be checked file by file. `build.json` names the commits of Pines' private development repository
+the package was built and packaged from; this repository is a path-for-path export of that repository, and its
+extension sources are those commits' files. The version number is set by the release packaging, not by
+`apps/tlsn-prover/build.mjs`.
+
+`id.pines.family/tee/health` is the API's own report of readiness and capacity, not signed evidence. The signed
+attestation reaches the extension with each verification, in the response to `/tee/admission`
+(`offer.evidence.cose`), and any Nitro attestation verifier can check it against AWS's root certificate.
 
 ## Reproduce the enclave image
 

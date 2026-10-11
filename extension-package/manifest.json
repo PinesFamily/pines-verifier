@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "141",
+  "name": "Pines Verifier",
+  "version": "1.13.14",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxGxWwduuesnqXCM32Tm8WUqM99ZIFLAAcN/76wyvENPCFQFxhESgHDCcjAKAzVoKaU/h7o4BKMj6BEeDF6A1LSA5ZrKHQ584UvErKvhkw2gj+mphnpDId2NTWCuZTnZcFTaoBrdCAvR8xSrT0dhe8coa8ijEXO3G2K47BPB1+Uzm13YTno9sz8TQzsFBSXMS05wPhY8//GbWBznsdAXS7iNuigkAoZVt7FQG0F9h5vKPq9G+HtjgRfbdQAUrCfnymM4TcYl3ITHK6ixpJeGEEIj8A7RaCi8Ax8X+ODw1SCIR0Jgu3DyyXRza1lnuzXq8fhT6JykkRdX6aX6KCS8yHQIDAQAB",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "description": "Verify your ChatGPT, Claude or Grok subscription privately with native TLSNotary and an attested AWS enclave.",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open Pines Verifier",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "permissions": [
+    "offscreen",
+    "storage",
+    "sidePanel",
+    "alarms",
+    "webRequest"
+  ],
+  "optional_host_permissions": [
+    "https://chatgpt.com/*",
+    "https://claude.ai/*",
+    "https://grok.com/*"
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://app.pines.family/*",
+      "https://front.pines.family/*",
+      "https://pines.family/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*"
+    ]
+  },
+  "cross_origin_embedder_policy": {
+    "value": "require-corp"
+  },
+  "cross_origin_opener_policy": {
+    "value": "same-origin"
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self' https://id.pines.family wss://id.pines.family; object-src 'none'; frame-ancestors 'none';"
+  }
+}
