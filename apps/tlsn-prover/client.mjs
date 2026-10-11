@@ -2,8 +2,13 @@
 // Lifecycle: The page stops *waiting* on its own; it asks the API to cancel only for
 // an explicit user action or a run the extension reports as stopped before its reveal. A transient API error, a
 // receipt-wait timeout or an unknown extension state never cancels: the proof may already be durable at the verifier.
+import {UPFRONT_CONSENT_VERSION} from './src/preparation.js';
 import {linkedWalletOf} from './src/binding-error.mjs';
 import {admissionErrors, retryTime} from './src/retry.js';
+import {sessionSnapshot, supportsSessionPolicy} from './src/session-timing.js';
+import {validateRegionHint} from '../../tools/tee-native/fleet-entry.mjs';
+export {supportedSessionPolicy} from './src/session-timing.js';
+export {parseEntryDiscovery} from '../../tools/tee-native/fleet-entry.mjs';
 // The Chrome Web Store item's id, which is NOT the unpacked pilot's `ecdnaaohmmdgeihflmlcbhgbcgfnacme`: the store
 // assigns an item its own id and refuses a manifest carrying `key`. Migrated 2026-09-30 (release doc option 2),
 // so an already-installed 0.4.x-0.9.x unpacked build no longer answers this page and has to be reinstalled.
@@ -45,15 +50,39 @@ const POLL_JITTER_MS = 500;
 const BACKOFF_MAX_MS = 30_000;
 /** Page pacing when no extension answers (older extension, restored reference, extension gone). */
 const IDLE_WAIT_MS = 1000;
+/** Upper bound on waiting for the extension's advisory region order; its probes stop at 1.5 s. */
+const REGION_PREFERENCE_WAIT_MS = 2000;
 const TRANSIENT = /^(API_(5\d\d|429|408)|VERIFICATION_UNAVAILABLE|WALLET_AUTH_UNAVAILABLE|NETWORK_ERROR|RATE_LIMITED|PROVIDER_CONTROL_UNAVAILABLE)$/;
 export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chainId, application, configuration, now = Date.now, random = Math.random,
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms))}) {
   const cancelled = new Set();
+  // Only this page's admitted runs can request cancellation over its bound
+  // owner port. Keep identifiers, never provider credentials or API tokens.
+  const ownedRuns = new Map(), ownerNonces = new Set();
+  const rememberRun = handle => {
+    for (const [id, value] of ownedRuns) if (value.attempt.resultExpiresAt <= now()) ownedRuns.delete(id);
+    if (ownedRuns.size >= 16) ownedRuns.delete(ownedRuns.keys().next().value);
+    const {attemptId, schema, resultExpiresAt, routing, verifier} = handle.attempt;
+    ownedRuns.set(handle.runId, {runId: handle.runId, recipient: handle.recipient, attempt: {attemptId, schema, resultExpiresAt, routing, verifier}});
+  };
   let ownerPort;
   const connectOwner = () => {
     if (ownerPort) return;
     const port = chrome.runtime.connect(extensionId, {name: 'pines-tlsn-owner-v1'}); ownerPort = port;
-    port.onMessage.addListener(value => {if (typeof value?.nonce === 'string') port.postMessage({nonce: value.nonce});});
+    port.onMessage.addListener(value => {
+      if (ownerPort !== port || !uuid.test(value?.nonce ?? '')) return;
+      if (hasKeys(value, ['nonce'])) {port.postMessage({nonce: value.nonce}); return;}
+      if (!hasKeys(value, ['nonce', 'type', 'runId', 'attemptId', 'recipient']) || value.type !== 'cancel-attempt'
+        || !uuid.test(value.runId) || !uuid.test(value.attemptId) || ownerNonces.has(value.nonce)) return;
+      if (ownerNonces.size >= 128) return;
+      ownerNonces.add(value.nonce);
+      const handle = ownedRuns.get(value.runId);
+      const matches = configuration?.tee && handle && handle.recipient === value.recipient
+        && handle.attempt.attemptId === value.attemptId && handle.attempt.resultExpiresAt > now();
+      void (matches ? cancelFromOwner(handle) : Promise.resolve('refused')).then(outcome => {
+        if (ownerPort === port) try {port.postMessage({nonce: value.nonce, type: 'cancel-attempt-result', outcome});} catch {}
+      });
+    });
     port.onDisconnect.addListener(() => {if (ownerPort === port) ownerPort = undefined; void chrome.runtime.lastError;});
   };
   const message = (type, value = {}) => new Promise((resolve, reject) => {
@@ -100,6 +129,17 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
   // `reason`: a bounded code for monitoring provider refusals (apps/api STOP_REASONS); never trusted for the result.
   const cancelAttempt = (handle, reason) => api(`/verification-attempts/${handle.attempt.attemptId}/cancel`, {method: 'POST', keepalive: true,
     ...(reason ? {headers: {'content-type': 'application/json'}, body: JSON.stringify({reason})} : {})}).catch(error => { if (error.status !== 409) throw error; });
+  const cancelFromOwner = async handle => {
+    try {
+      // A 409 means it settled first. Read its bound status rather than treating
+      // an already-saved receipt as a successful cancellation request.
+      const reply = await cancelAttempt(handle, 'USER');
+      const status = checkStatus(handle, reply ?? await api(`/verification-attempts/${handle.attempt.attemptId}`));
+      if (status.status === 'verified' && uuid.test(status.receiptId)) return 'completed';
+      if (status.cancelRequested === true || status.status === 'cancelled') return 'recorded';
+      return ['failed', 'expired'].includes(status.status) ? 'terminal' : 'refused';
+    } catch { return 'refused'; }
+  };
   // Lifecycle row 3: the cancel request is recorded before the run stops, so the
   // verifier's end of the session settles the attempt as cancelled, not failed. The wait is bounded: an unreachable
   // API never keeps a run going, and after 2 s the run stops while the request finishes.
@@ -119,6 +159,7 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
       const value = await message('bridge-ping');
       if (value.protocol !== protocol || value.engine !== 'tlsn' || value.mode !== 'Proxy' || value.chainId !== chainId || value.application !== application || value.wasmVersion !== '0.1.0-alpha.15' || value.claimable !== false || !Array.isArray(value.schemas)) throw Error('EXTENSION_VERSION_MISMATCH');
       if (configuration?.tee && !sameTeeCapability(configuration.tee, value.tee)) throw Error('EXTENSION_UPDATE_REQUIRED');
+      if (configuration?.tee && !supportsSessionPolicy(value.sessionPolicySupport, configuration.sessionPolicy)) throw Error('EXTENSION_UPDATE_REQUIRED');
       const routing = assignedRouting(value) ? 'assigned' : 'pinned';
       // A pinned (pre-assignment) extension can only use the one verifier its build names.
       const hasEnabledSchema = !configuration?.schemas.length || configuration.schemas.some(schema => value.schemas.some(candidate => sameSchema(candidate, schema)));
@@ -126,25 +167,41 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
         || !hasEnabledSchema)) throw Error(routing === 'pinned' && configuration.attemptRouting?.includes?.('assigned') ? 'EXTENSION_UPDATE_REQUIRED' : 'EXTENSION_VERSION_MISMATCH');
       return {...value, routingMode: routing};
     },
-    async start(recipient, schemaId = 'pines.fixture.httpbingo', {signal, onAttempt = () => {}} = {}) {
+    async start(recipient, schemaId = 'pines.fixture.httpbingo', {signal, onAttempt = () => {}, isCurrent = () => true, onPreparation = () => {}} = {}) {
       if (typeof recipient !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(recipient) || recipient === '0x' + '0'.repeat(40)) throw Error('INVALID_RECIPIENT');
       recipient = recipient.toLowerCase();
       const capabilities = await client.capabilities();
       const schema = capabilities.schemas.find(schema => schema.schemaId === schemaId && (!configuration || configuration.schemas.some(enabled => sameSchema(enabled, schema))));
       if (!schema) throw Error('SCHEMA_UNAVAILABLE');
+      if (configuration?.tee && (capabilities.upfrontConsent !== UPFRONT_CONSENT_VERSION || !capabilities.prepareProvider)) throw Error('EXTENSION_UPDATE_REQUIRED');
       if (signal?.aborted) throw Error('CANCELLED');
       if (capabilities.ownerConnection) connectOwner();
-      let preparation;
+      // Regional entry: only when this API advertises it and this extension measures it.
+      // Asked now so probes overlap local preparation; any failure simply sends no hint.
+      const regionHint = configuration?.teeRegionalEntry && capabilities.regionalEntry === 1 ? new Promise(resolve => {
+        const timer = setTimeout(() => resolve(undefined), REGION_PREFERENCE_WAIT_MS);
+        message('region-preference', {discovery: configuration.teeRegionalEntry})
+          .then(reply => {try {resolve(validateRegionHint(reply.regions));} catch {resolve(undefined);}}, () => resolve(undefined))
+          .finally(() => clearTimeout(timer));
+      }) : Promise.resolve(undefined);
+      const current = () => {if (signal?.aborted) throw Error('CANCELLED'); if (!isCurrent()) throw Error('RECIPIENT_CHANGED');};
+      current();
+      let preparation, executionId;
       if (capabilities.prepareProvider) {
         preparation = await message('prepare-provider', {recipient, schema});
         try {
           while (!preparation.preparationReady) {
-            if (signal?.aborted) throw Error('CANCELLED');
+            current(); onPreparation(preparation);
             if (['cancelled', 'failed'].includes(preparation.phase)) throw Error(preparation.error ?? 'CANCELLED');
             await sleep(300);
             preparation = await message('preparation-status', {runId: preparation.runId, recipient});
           }
-          if (signal?.aborted) throw Error('CANCELLED');
+          current(); onPreparation(preparation);
+          if (capabilities.upfrontConsent === UPFRONT_CONSENT_VERSION) {
+            ({executionId} = await message('claim-preparation', {runId: preparation.runId, recipient}));
+            if (!uuid.test(executionId)) throw Error('CONSENT_REQUIRED');
+            current();
+          }
         } catch (error) {
           await message('cancel-verification', {runId: preparation.runId, recipient}).catch(() => {}); throw error;
         }
@@ -152,8 +209,13 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
       const routing = capabilities.routingMode;
       let attempt;
       try {
-        attempt = await api('/verification-attempts', {method: 'POST', headers: {'content-type': 'application/json'},
-          body: JSON.stringify(routing === 'assigned' ? {recipient, schema, routing} : {recipient, schema})});
+        const hint = await regionHint;
+        current();
+        const create = withHint => api('/verification-attempts', {method: 'POST', headers: {'content-type': 'application/json'},
+          body: JSON.stringify({...(routing === 'assigned' ? {recipient, schema, routing} : {recipient, schema}), ...(withHint ? {regionHint: hint} : {})})});
+        // A refused body created nothing; an API whose regional entry was switched off since discovery still serves the plain request.
+        try {attempt = await create(Boolean(hint));}
+        catch (error) {if (!hint || error.status !== 400) throw error; current(); attempt = await create(false);}
       } catch (error) {
         if (!signal?.aborted && capabilities.admissionErrorScreen === true && admissionErrors.has(error.message)) {
           await message('verification-refused', {recipient, schema, error: error.message, retryAt: error.message === 'RATE_LIMITED' ? error.retryAt : null}).catch(() => {});
@@ -165,14 +227,20 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
       const assignment = routing === 'assigned' ? {instanceId: attempt.verifier.instanceId, origin: attempt.verifier.origin, revision: attempt.verifier.revision} : undefined;
       let handle = {attempt: {...attempt, routing, ...(assignment ? {verifier: assignment} : {})}, recipient};
       try {
+        // Discovery is presentation, not the snapshot: an operator may have
+        // edited it since this page loaded. Validate the admitted policy itself.
+        if (configuration?.tee) sessionSnapshot(attempt, now());
         onAttempt({recipient, attempt: {attemptId: attempt.attemptId, schema: attempt.schema, resultExpiresAt: attempt.resultExpiresAt}});
         if (signal?.aborted) throw Error('CANCELLED');
-        const started = await message('verify-provider', {recipient, attempt, ...(preparation ? {preparationId: preparation.runId} : {})});
+        if (configuration?.tee && preparation) rememberRun({...handle, runId: preparation.runId});
+        const started = await message('verify-provider', {recipient, attempt, ...(preparation ? {preparationId: preparation.runId} : {}), ...(executionId ? {executionId} : {})});
         if (!uuid.test(started.runId) || started.attemptId !== attempt.attemptId || started.recipient !== recipient || !sameSchema(started.schema, schema)) throw Error('ATTEMPT_MISMATCH');
         handle = {runId: started.runId, attempt: handle.attempt, recipient};
+        if (configuration?.tee) rememberRun(handle);
         if (signal?.aborted) { await client.cancel(handle).catch(() => {}); throw Error('CANCELLED'); }
         return handle;
       } catch (error) {
+        if (preparation) ownedRuns.delete(preparation.runId);
         // The run never started (or its start is unknown). A cancel request is safe either way: it frees the wallet
         // and lets the API revoke the unredeemed ticket; a proof that did start and completes is still accepted.
         await cancelAttempt(handle).catch(() => {});
@@ -198,7 +266,7 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
      * `RECEIPT_PENDING` (recoverable; nothing is cancelled) when the wait ends first, and `WALLET_UNAUTHORIZED` when the
      * wallet session must be renewed before the same attempt can be read again.
      */
-    async waitForReceipt(handle, {signal, timeoutMs = 120_000, onProgress = () => {}} = {}) {
+    async waitForReceipt(handle, {signal, timeoutMs = Math.max(120_000, (handle.attempt.sessionExpiresAt ?? now()) - now() + 120_000), onProgress = () => {}} = {}) {
       const deadline = Math.min(now() + timeoutMs, handle.attempt.resultExpiresAt);
       const checkCancelled = async () => {
         if (signal?.aborted || cancelled.has(handle.attempt.attemptId)) { await client.cancel(handle).catch(() => {}); throw Error('CANCELLED'); }
@@ -236,6 +304,13 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
             return state;
           }
           if (state && ['failed', 'cancelled', 'expired'].includes(state.status)) {
+            // The authoritative cancellation status wins over its transport
+            // error detail. A request alone never takes this path: a later
+            // verified receipt above still succeeds even if cancellation raced.
+            if (configuration?.tee && state.status === 'cancelled') {
+              if (handle.runId) await message('cancel-verification', {runId: handle.runId, recipient: handle.recipient}).catch(() => {});
+              throw Error('CANCELLED');
+            }
             const error = typeof state.error === 'string' && /^[A-Z_]{1,64}$/.test(state.error) ? state.error : state.status.toUpperCase();
             const linkedWallet = linkedWalletOf(state);
             if (handle.runId) await message('receipt-rejected', {runId: handle.runId, recipient: handle.recipient, error, linkedWallet: linkedWallet ?? null}).catch(() => {});

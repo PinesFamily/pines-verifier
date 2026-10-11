@@ -8,6 +8,8 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Deserialize;
 use std::{
     io::{self, Read},
+    os::unix::process::CommandExt,
+    process::Command,
     sync::Arc,
     time::Duration,
 };
@@ -18,7 +20,10 @@ use tokio::{
 };
 use tokio_vsock::{VsockAddr, VsockListener, VsockStream};
 
+mod spki;
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+const MAX_PROOF_SLOTS: usize = 8;
 fn require(ok: bool) -> Result<()> {
     if ok {
         Ok(())
@@ -35,17 +40,49 @@ struct Binding {
     user_data: String,
 }
 
-fn attest() -> Result<()> {
+fn attestation_binding_sizes(key: usize, nonce: usize, data: usize) -> bool {
+    // Proof channels bind a P-256 SPKI (91 bytes); controller enrollment binds
+    // the measured per-boot Ed25519 public key (32 raw bytes). Both callers are
+    // fixed measured code, and neither exposes arbitrary parent attestation.
+    matches!(key, 32 | 91) && nonce == 32 && data == 32
+}
+
+fn read_binding() -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
     // Private stdin inherited only by the measured Node process. No network
     // endpoint accepts caller-selected attestation fields or host time.
     let mut input = Vec::new();
     io::stdin().take(2049).read_to_end(&mut input)?;
     require(input.len() <= 2048)?;
     let b: Binding = serde_json::from_slice(&input)?;
-    let key = STANDARD.decode(b.public_key)?;
-    let nonce = STANDARD.decode(b.nonce)?;
-    let data = STANDARD.decode(b.user_data)?;
-    require(key.len() == 91 && nonce.len() == 32 && data.len() == 32)?;
+    Ok((
+        STANDARD.decode(b.public_key)?,
+        STANDARD.decode(b.nonce)?,
+        STANDARD.decode(b.user_data)?,
+    ))
+}
+
+fn attest() -> Result<()> {
+    let (key, nonce, data) = read_binding()?;
+    require(attestation_binding_sizes(
+        key.len(),
+        nonce.len(),
+        data.len(),
+    ))?;
+    issue_attestation(key, nonce, data)
+}
+
+/// Separate lane for the deferred keyed-identity work: an attested AWS KMS
+/// `Recipient` must carry an RSA public key, which neither existing binding form
+/// can express. It accepts only a canonical RSA-2048 SPKI, so the sizes above
+/// stay exactly as qualified and arbitrary 294-byte parent data is not
+/// attestable. Nothing in the current image calls this mode.
+fn attest_kms_recipient() -> Result<()> {
+    let (key, nonce, data) = read_binding()?;
+    require(spki::is_rsa_2048_spki(&key) && nonce.len() == 32 && data.len() == 32)?;
+    issue_attestation(key, nonce, data)
+}
+
+fn issue_attestation(key: Vec<u8>, nonce: Vec<u8>, data: Vec<u8>) -> Result<()> {
     let fd = nsm_init();
     require(fd >= 0)?;
     let reply = nsm_process_request(
@@ -133,6 +170,67 @@ fn loopback() -> Result<()> {
     require(result == 0)
 }
 
+fn native_memory_limit(value: &str) -> Result<libc::rlim_t> {
+    require(!value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()))?;
+    let mib: u64 = value.parse()?;
+    // The parser's range is the union of the class floors below and the 4096 MiB
+    // ceiling; each class then enforces its own measured floor independently.
+    require((448..=4096).contains(&mib) && value == mib.to_string())?;
+    Ok((mib * 1024 * 1024) as libc::rlim_t)
+}
+
+fn set_native_limits(value: &str) -> Result<()> {
+    let limit = native_memory_limit(value)?;
+    let memory = libc::rlimit {
+        rlim_cur: limit,
+        rlim_max: limit,
+    };
+    let core = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    require(unsafe { libc::setrlimit(libc::RLIMIT_AS, &memory) } == 0)?;
+    require(unsafe { libc::setrlimit(libc::RLIMIT_CORE, &core) } == 0)?;
+    Ok(())
+}
+
+// Match the measured resource-class floors independently of JavaScript. The
+// per-boot selection supplies the ceiling; disclosure selects the native path.
+fn native_disclosure_memory(policy: &str, value: &str) -> Result<()> {
+    native_memory_limit(value)?;
+    match policy {
+        "redacted-response-v1" => require(value.parse::<u64>()? >= 3072),
+        "full-response-v1" => require(value.parse::<u64>()? >= 512),
+        // The private-headers class floor (capacity-policy.mjs RESOURCE_CLASSES): local
+        // generated-data evidence, 448 MiB; the hardware campaign confirms or raises it.
+        "private-headers-gzip-v1" => require(value.parse::<u64>()? >= 448),
+        _ => require(false),
+    }
+}
+
+fn native(args: &[String]) -> Result<()> {
+    require(args.len() == 8 && std::path::Path::new("/dev/nsm").exists())?;
+    require(matches!(args[2].as_str(), "chatgpt" | "claude" | "grok"))?;
+    require(
+        args[6].len() == 64
+            && args[6]
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+    )?;
+    native_disclosure_memory(&args[7], &args[5])?;
+    // Fixed child only, no shell or parent-selected executable. Hard address
+    // space cap covers the redacted path even when allocation is adversarial.
+    set_native_limits(&args[5])?;
+    Err(Command::new("/app/bin/tee-hardware")
+        .args(&args[2..5])
+        .arg(&args[6])
+        .arg(&args[7])
+        .env("MALLOC_ARENA_MAX", "2")
+        .env("RAYON_NUM_THREADS", "1")
+        .exec()
+        .into())
+}
+
 async fn copy<A: AsyncRead + AsyncWrite + Unpin, B: AsyncRead + AsyncWrite + Unpin>(
     a: A,
     b: B,
@@ -150,12 +248,14 @@ async fn copy<A: AsyncRead + AsyncWrite + Unpin, B: AsyncRead + AsyncWrite + Unp
         }
         Ok::<(), std::io::Error>(())
     };
-    tokio::time::timeout(Duration::from_secs(130), flow).await??;
+    // Transport lifetime covers the compiled 300-second session ceiling plus
+    // bounded setup/retirement. The signed grant remains the work deadline.
+    tokio::time::timeout(Duration::from_secs(310), flow).await??;
     Ok(())
 }
 
 // Fixed routes are measured. Parent input cannot supply a destination, URL,
-// port, DNS name or protocol. Three listeners share one egress semaphore.
+// port, DNS name or protocol. Three listeners share the bounded egress pool.
 #[derive(Clone, Copy)]
 struct ProviderRoute {
     vsock: u32,
@@ -179,6 +279,22 @@ const PROVIDER_ROUTES: [ProviderRoute; 3] = [
         destination: "grok.com:443",
     },
 ];
+// Deferred keyed-identity transport. The endpoint, both vsock ports and the
+// parent's loopback handoff address are measured constants: the parent chooses
+// none of them and cannot redirect either route. TLS for the KMS route is
+// terminated by the measured Node process at the enclave end of this pipe, so a
+// parent that resolves or reroutes the hostname still decrypts nothing. Nothing
+// in the current entrypoint starts these modes.
+const KMS_ENDPOINT: &str = "kms.ap-southeast-2.amazonaws.com:443";
+const KMS_PARENT_HANDOFF: &str = "127.0.0.1:8971";
+const KMS_EGRESS_LOCAL: &str = "127.0.0.1:18020";
+const KMS_HANDOFF_LOCAL: &str = "127.0.0.1:18021";
+const KMS_EGRESS_VSOCK: u32 = 8005;
+const KMS_HANDOFF_VSOCK: u32 = 8006;
+// One boot performs a handful of bounded requests; this is not a proof route.
+const KMS_BYTE_CAP: u64 = 256 * 1024;
+const KMS_SLOTS: usize = 2;
+
 async fn from_vsock(
     port: u32,
     expected_peer: u32,
@@ -239,7 +355,7 @@ async fn bridge(mode: &str) -> Result<()> {
                 3,
                 "127.0.0.1:18000",
                 70 * 1024 * 1024,
-                Arc::new(Semaphore::new(8)),
+                Arc::new(Semaphore::new(MAX_PROOF_SLOTS + 2)),
             )
             .await
         }
@@ -249,12 +365,32 @@ async fn bridge(mode: &str) -> Result<()> {
                 16,
                 8000,
                 70 * 1024 * 1024,
+                Arc::new(Semaphore::new(MAX_PROOF_SLOTS + 2)),
+            )
+            .await
+        }
+        "enclave-control" => {
+            from_vsock(
+                8004,
+                3,
+                "127.0.0.1:18010",
+                4 * 1024 * 1024,
+                Arc::new(Semaphore::new(8)),
+            )
+            .await
+        }
+        "parent-control" => {
+            from_tcp(
+                "127.0.0.1:8970",
+                16,
+                8004,
+                4 * 1024 * 1024,
                 Arc::new(Semaphore::new(8)),
             )
             .await
         }
         "parent-egress" => {
-            let permits = Arc::new(Semaphore::new(1));
+            let permits = Arc::new(Semaphore::new(MAX_PROOF_SLOTS));
             let [a, b, c] = PROVIDER_ROUTES;
             tokio::try_join!(
                 from_vsock(a.vsock, 16, a.destination, 131072, permits.clone()),
@@ -264,7 +400,7 @@ async fn bridge(mode: &str) -> Result<()> {
             Ok(())
         }
         "enclave-egress" => {
-            let permits = Arc::new(Semaphore::new(1));
+            let permits = Arc::new(Semaphore::new(MAX_PROOF_SLOTS));
             let [a, b, c] = PROVIDER_ROUTES;
             tokio::try_join!(
                 from_tcp(a.local, 3, a.vsock, 131072, permits.clone()),
@@ -273,19 +409,62 @@ async fn bridge(mode: &str) -> Result<()> {
             )?;
             Ok(())
         }
+        "enclave-kms-egress" => {
+            from_tcp(
+                KMS_EGRESS_LOCAL,
+                3,
+                KMS_EGRESS_VSOCK,
+                KMS_BYTE_CAP,
+                Arc::new(Semaphore::new(KMS_SLOTS)),
+            )
+            .await
+        }
+        "parent-kms-egress" => {
+            from_vsock(
+                KMS_EGRESS_VSOCK,
+                16,
+                KMS_ENDPOINT,
+                KMS_BYTE_CAP,
+                Arc::new(Semaphore::new(KMS_SLOTS)),
+            )
+            .await
+        }
+        "enclave-kms-handoff" => {
+            from_tcp(
+                KMS_HANDOFF_LOCAL,
+                3,
+                KMS_HANDOFF_VSOCK,
+                KMS_BYTE_CAP,
+                Arc::new(Semaphore::new(KMS_SLOTS)),
+            )
+            .await
+        }
+        "parent-kms-handoff" => {
+            from_vsock(
+                KMS_HANDOFF_VSOCK,
+                16,
+                KMS_PARENT_HANDOFF,
+                KMS_BYTE_CAP,
+                Arc::new(Semaphore::new(KMS_SLOTS)),
+            )
+            .await
+        }
         _ => Err("RUNTIME_REFUSED".into()),
     }
 }
 
-#[tokio::main]
+#[tokio::main(worker_threads = 2)]
 async fn main() {
-    if std::env::args().len() != 2 {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 && !(args.len() == 8 && args[1] == "native") {
         eprintln!("NITRO_RUNTIME_REFUSED");
         std::process::exit(78);
     }
-    let mode = std::env::args().nth(1).unwrap_or_default();
-    let result = match mode.as_str() {
+    let mode = args[1].as_str();
+    let result = match mode {
+        "native" => native(&args),
         "attest" => attest(),
+        "attest-kms-recipient" => attest_kms_recipient(),
         "clock" => clock(),
         "loopback" => loopback(),
         "time" => nsm_time().map(|ms| println!("{{\"timestamp\":{ms}}}")),
@@ -301,6 +480,103 @@ async fn main() {
 mod tests {
     use super::*;
     use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
+    #[test]
+    fn native_memory_policy_is_integer_and_bounded() {
+        for value in ["448", "512", "2048", "3072", "4096"] {
+            assert_eq!(
+                native_memory_limit(value).unwrap(),
+                value.parse::<u64>().unwrap() * 1024 * 1024
+            );
+        }
+        for value in ["", "447", "4097", "+512", " 512", "2e3", "2048.0"] {
+            assert!(native_memory_limit(value).is_err());
+        }
+    }
+    #[test]
+    fn hard_native_memory_limit_refuses_excess_allocation_in_a_separate_child() {
+        const CHILD: &str = "PINES_RESOURCE_LIMIT_TEST_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            set_native_limits("512").unwrap();
+            let mut current = libc::rlimit {
+                rlim_cur: 0,
+                rlim_max: 0,
+            };
+            assert_eq!(unsafe { libc::getrlimit(libc::RLIMIT_AS, &mut current) }, 0);
+            assert_eq!(current.rlim_cur, 512 * 1024 * 1024);
+            assert_eq!(current.rlim_max, current.rlim_cur);
+            let memory = unsafe {
+                libc::mmap(
+                    std::ptr::null_mut(),
+                    1024 * 1024 * 1024,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                    libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                    -1,
+                    0,
+                )
+            };
+            assert_eq!(memory, libc::MAP_FAILED);
+            return;
+        }
+        let child = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tests::hard_native_memory_limit_refuses_excess_allocation_in_a_separate_child",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(child.status.success());
+    }
+    #[test]
+    fn attestation_accepts_only_proof_and_membership_binding_sizes() {
+        assert!(attestation_binding_sizes(91, 32, 32));
+        assert!(attestation_binding_sizes(32, 32, 32));
+        for key in [0, 31, 33, 44, 90, 92, 1024] {
+            assert!(!attestation_binding_sizes(key, 32, 32));
+        }
+        for key in [32, 91] {
+            for size in [0, 31, 33, 1024] {
+                assert!(!attestation_binding_sizes(key, size, 32));
+                assert!(!attestation_binding_sizes(key, 32, size));
+            }
+        }
+    }
+    #[test]
+    fn deferred_kms_routes_are_fixed_and_collide_with_no_qualified_route() {
+        assert_eq!(KMS_ENDPOINT, "kms.ap-southeast-2.amazonaws.com:443");
+        assert_eq!(KMS_PARENT_HANDOFF, "127.0.0.1:8971");
+        // The permanent wrapping key stays in US East; no mode names another region.
+        assert!(!KMS_ENDPOINT.contains("us-east-1"));
+        let vsock = [
+            8000u32,
+            8001,
+            8002,
+            8003,
+            8004,
+            KMS_EGRESS_VSOCK,
+            KMS_HANDOFF_VSOCK,
+        ];
+        let local = [
+            "127.0.0.1:18000",
+            "127.0.0.1:18001",
+            "127.0.0.1:18002",
+            "127.0.0.1:18003",
+            "127.0.0.1:18010",
+            KMS_EGRESS_LOCAL,
+            KMS_HANDOFF_LOCAL,
+        ];
+        assert_eq!(
+            vsock.iter().collect::<std::collections::HashSet<_>>().len(),
+            vsock.len()
+        );
+        assert_eq!(
+            local.iter().collect::<std::collections::HashSet<_>>().len(),
+            local.len()
+        );
+        // The recipient lane is additive: the qualified sizes are unchanged and
+        // its own length is not accepted by the existing proof/enrollment path.
+        assert!(!attestation_binding_sizes(spki::RSA_2048_SPKI_LEN, 32, 32));
+    }
     #[test]
     fn provider_routes_are_closed_and_do_not_share_a_destination_port() {
         let actual: Vec<_> = PROVIDER_ROUTES
@@ -366,5 +642,27 @@ mod tests {
         let mut tail = Vec::new();
         client.read_to_end(&mut tail).await.unwrap();
         assert!(tail.is_empty());
+    }
+}
+#[test]
+fn independent_disclosure_floors_and_canonical_budgets() {
+    for value in ["512", "768", "1024", "4096"] {
+        assert!(native_disclosure_memory("full-response-v1", value).is_ok());
+    }
+    assert!(native_disclosure_memory("redacted-response-v1", "3072").is_ok());
+    for value in ["511", "448", "4097", "01024", "1024.0"] {
+        assert!(native_disclosure_memory("full-response-v1", value).is_err());
+    }
+    for value in ["512", "1024", "2048", "3071"] {
+        assert!(native_disclosure_memory("redacted-response-v1", value).is_err());
+    }
+    for value in ["448", "512", "1024", "4096"] {
+        assert!(native_disclosure_memory("private-headers-gzip-v1", value).is_ok());
+    }
+    for value in ["447", "384", "0447", "4097"] {
+        assert!(native_disclosure_memory("private-headers-gzip-v1", value).is_err());
+    }
+    for policy in ["full-response-v2", "", "redacted-max-v1", "private-headers-gzip", "private-headers-gzip-v2"] {
+        assert!(native_disclosure_memory(policy, "1024").is_err());
     }
 }

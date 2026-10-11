@@ -5,6 +5,8 @@ import {dirname, join, resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {build} from 'esbuild';
 import {funnelOrigins, matchPatternsFor} from './src/funnel-origins.mjs';
+import {copyPinnedWasm} from './wasm-io-package.mjs';
+import {regionalConnectSources} from './regional-entry-build.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -14,6 +16,10 @@ const teePath = env.PINES_TEE_PUBLIC_CONFIG;
 const publicRelease = env.PINES_TEE_PUBLIC_RELEASE === '1';
 const teePublic = teePath ? JSON.parse(await readFile(teePath, 'utf8')) : null;
 const teeFixture = env.PINES_TEE_FIXTURE_CONFIG ? JSON.parse(await readFile(env.PINES_TEE_FIXTURE_CONFIG, 'utf8')) : null;
+const qualification = env.PINES_TEE_QUALIFICATION_CONFIG
+  ? await (await import('../../tools/tee-native/hardware/qualification-build.mjs')).qualificationBuild(env.PINES_TEE_QUALIFICATION_CONFIG) : null;
+if (qualification && (publicRelease || !teePublic || Boolean(teeFixture) !== (qualification.variant === 'fixture'))) throw Error('QUALIFICATION_BUILD_REFUSED');
+if (env.PINES_TEE_REGIONAL_ENTRY_SUFFIX !== undefined && (!teePublic || publicRelease || qualification || teeFixture)) throw Error('TEE_REGIONAL_ENTRY_SCOPE');
 if (teeFixture && (!teePublic || teeFixture.syntheticOnly !== true || teeFixture.hardware !== true || !Array.isArray(teeFixture.root))) throw Error('TEE_FIXTURE_BUILD_REFUSED');
 if (env.PINES_TLSN_PRIVATE_FIXTURE && env.PINES_TLSN_PRIVATE_FIXTURE !== '1') throw Error('PINES_TLSN_PRIVATE_FIXTURE must be 1 or unset');
 const privateFixture = env.PINES_TLSN_PRIVATE_FIXTURE === '1';
@@ -37,6 +43,15 @@ if (grok && !chatgptIdentity) throw Error('Grok verification requires PINES_TLSN
 if (env.PINES_TLSN_TEST_BUILD && env.PINES_TLSN_TEST_BUILD !== '1') throw Error('PINES_TLSN_TEST_BUILD must be 1 or unset');
 // Loopback verifier origins and benchmark verifiers are an explicit test-build choice.
 const testBuild = env.PINES_TLSN_TEST_BUILD === '1';
+// Regional direct entry is opt-in and outside every current public or
+// qualification package scope; those builds stay byte-identical and keep the central relay only.
+const regionalSuffix = env.PINES_TEE_REGIONAL_ENTRY_SUFFIX;
+// The disclosure class this package is built for. Default-off: the qualified full-response
+// class, byte-identical to every earlier build. The private-headers class is an explicit
+// choice for a TEE build only; a package never carries both, and nothing falls back.
+const disclosurePolicyId = env.PINES_TEE_DISCLOSURE_POLICY ?? 'full-response-v1';
+if (!['full-response-v1', 'private-headers-gzip-v1'].includes(disclosurePolicyId)) throw Error('TEE_DISCLOSURE_POLICY');
+if (disclosurePolicyId !== 'full-response-v1' && !teePublic) throw Error('TEE_DISCLOSURE_POLICY_SCOPE');
 function origin(value) {
   const url = new URL(value);
   if (url.origin !== value || url.username || url.password || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)))) throw Error('An exact HTTPS or loopback HTTP origin is required');
@@ -48,8 +63,7 @@ function verifier(value) {
   return value;
 }
 const identity = JSON.parse(await readFile(join(here, 'config/identity.json')));
-const sourceRevision = env.PINES_SOURCE_REVISION ?? execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim();
-if (!/^[a-f0-9]{40}$/.test(sourceRevision)) throw Error('PINES_SOURCE_REVISION must be a full commit hash');
+const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim();
 const sourceDirty = Boolean(execFileSync('git', ['status', '--porcelain'], {cwd: root, encoding: 'utf8'}).trim());
 const origins = funnelOrigins(env).map(origin);
 if (teePublic && (!env.PROVER_FUNNEL_ORIGINS || env.PROVER_FUNNEL_ORIGINS_EXCLUSIVE !== '1' || claude || grok || privateFixture || chatgptClaims)) throw Error('TEE_EXACT_ORIGINS_AND_PROVIDER_REQUIRED');
@@ -65,34 +79,51 @@ const chainId = Number(env.PINES_TLSN_CHAIN_ID ?? 4663);
 if (!/^[a-zA-Z0-9._-]{1,80}$/.test(verifierRevision) || !/^[a-zA-Z0-9._-]{1,64}$/.test(application) || !Number.isSafeInteger(chainId) || chainId <= 0) throw Error('Invalid verifier audience or revision');
 let tee;
 if (teePublic) {
-  const {HARDWARE_PROVIDERS, hardwareCapability} = await import('../../tools/tee-native/profile.mjs');
+  const {providersFor, hardwareCapability} = await import('../../tools/tee-native/profile.mjs');
   const {policyForSchema} = await import('../../tools/tee-native/policy.mjs');
   const {CONTEXT} = await import('../../tools/tee-native/hardware/context.mjs');
   if (createHash('sha256').update(await readFile(join(root, 'contracts/deployments/production.json'))).digest('hex') !== CONTEXT.deploymentHash) throw Error('TEE_DEPLOYMENT_ARTIFACT_DRIFT');
-  const policySet = teeFixture ? teePublic.policy : JSON.parse(await readFile(join(root, 'tools/tee-native/hardware/policy.json'), 'utf8'));
+  const policySet = qualification ? qualification.policy : teeFixture ? teePublic.policy : JSON.parse(await readFile(join(root, 'tools/tee-native/hardware/policy.json'), 'utf8'));
   if (teeFixture && (!teeFixture.origin || origins.length !== 1 || origins[0] !== teeFixture.origin || !['http://localhost:5262'].includes(teeFixture.origin))) throw Error('TEE_FIXTURE_ORIGIN_REFUSED');
   if (!/^[a-f0-9]{64}$/.test(teePublic.apiKey) || JSON.stringify(teePublic.policy) !== JSON.stringify(policySet)) throw Error('TEE_TRUST_POLICY_UNQUALIFIED');
-  const providers = await Promise.all(HARDWARE_PROVIDERS.map(async entry => {
-    const policy = await policyForSchema(policySet, entry.reference);
-    if (policy?.admissionEnabled && (!entry.inventory.qualified || policy.syntheticOnly || !policy.providerQualified || !policy.clockQualified || !policy.lifecycleQualified
+  if (qualification && qualification.disclosurePolicy !== disclosurePolicyId) throw Error('QUALIFICATION_DISCLOSURE_POLICY');
+  const providers = await Promise.all(providersFor(disclosurePolicyId).map(async entry => {
+    const policy = await policyForSchema(policySet, entry.reference, disclosurePolicyId);
+    if (policy?.admissionEnabled && (policy.identity?.generation!=='v2' || !entry.inventory.qualified || policy.syntheticOnly || !policy.providerQualified || !policy.clockQualified || !policy.lifecycleQualified
       || policy.debugAllowed !== false || policy.simulationAllowed !== false || !Array.isArray(policy.pcrTuples) || policy.pcrTuples.length !== 1
       || policy.pcrTuples[0].length !== 3 || !policy.pcrTuples[0].every(pcr => /^[a-f0-9]{96}$/.test(pcr)))) throw Error('TEE_HARDWARE_QUALIFICATION_REQUIRED');
     return {schema: entry.schema, reference: entry.reference, profile: entry.profile, publicPlanValues: entry.publicPlanValues, policy};
   }));
   const apiOrigin = origin(env.PINES_TEE_TRANSPORT_ORIGIN ?? 'http://localhost:8971');
-  if(publicRelease && (teeFixture || apiOrigin!=='https://id.pines.family'
+  if (qualification) {
+    if (origins.length !== 1) throw Error('QUALIFICATION_BUILD_SCOPE');
+    (await import('../../tools/tee-native/hardware/qualification-build.mjs')).qualificationBuildScope(qualification,
+      {publicRelease,fixture:Boolean(teeFixture),apiKey:teePublic.apiKey,origin:origins[0],transport:apiOrigin});
+  }
+  if(publicRelease && (teeFixture || disclosurePolicyId!=='full-response-v1' || apiOrigin!=='https://id.pines.family'
     || JSON.stringify(origins)!==JSON.stringify(['https://app.pines.family','https://front.pines.family','https://pines.family','http://localhost:5270']))) throw Error('TEE_PUBLIC_RELEASE_SCOPE');
   if (verifierOrigin !== apiOrigin || verifierRevision !== CONTEXT.revision || application !== CONTEXT.application || chainId !== CONTEXT.chain) throw Error('TEE_CONTEXT_DRIFT');
-  tee = {api: apiOrigin + '/tee', relay: apiOrigin.replace(/^http/, 'ws') + '/channel', apiKey: teePublic.apiKey, policySet, providers,
-    capability: hardwareCapability(), ...(teeFixture ? {fixture: teeFixture} : {})};
+  const entry = regionalSuffix === undefined ? undefined : await import('../../tools/tee-native/fleet-entry.mjs');
+  tee = {api: apiOrigin + '/tee', relay: apiOrigin.replace(/^http/, 'ws') + '/channel', apiKey: teePublic.apiKey, policySet, providers, disclosurePolicy: disclosurePolicyId,
+    capability: hardwareCapability(disclosurePolicyId), ...(teeFixture ? {fixture: teeFixture} : {}),
+    ...(entry ? {regionalEntry: {version: 1, protocol: entry.ENTRY_PROTOCOL, suffix: entry.validateEntrySuffix(regionalSuffix)}} : {})};
 }
-if (tee && JSON.stringify(tee.capability) !== JSON.stringify(JSON.parse(await readFile(join(here, 'config/tee-capability.json'), 'utf8')))) throw Error('TEE_PUBLIC_PIN_DRIFT');
+// Each class has its own pinned capability file; the full-response pin is the unchanged one.
+const capabilityPin = disclosurePolicyId === 'full-response-v1' ? 'config/tee-capability.json' : 'config/tee-capability-private-headers.json';
+if (tee && JSON.stringify(tee.capability) !== JSON.stringify(JSON.parse(await readFile(join(here, capabilityPin), 'utf8')))) throw Error('TEE_PUBLIC_PIN_DRIFT');
 const config = {protocol: 'pines-tlsn-bridge-v1', wasmVersion: '0.1.0-alpha.15', origins, verifierOrigin, verifierRevision, verifierPolicy, routing: tee ? ['pinned'] : ['pinned', 'assigned'], testBuild, application, chainId, captureProvider: chatgpt || privateFixture,
+  ...(qualification?.mode==='prebuild'
+    ? {qualificationResponseMetadata:{...qualification.responseMetadata,sourceRevision}} : {}),
   ...(tee ? {tee} : {}), schemas: tee ? tee.providers.filter(entry => entry.policy?.admissionEnabled).map(entry => entry.reference) : chatgpt ? [{schemaId: 'pines.chatgpt.plan', version: chatgptIdentity ? 3 : chatgptClaims ? 2 : 1}, ...(claude ? [{schemaId: 'pines.claude.plan', version: 1}] : []),
     ...(grok ? [{schemaId: 'pines.grok.plan', version: 1}] : [])]
     : [{schemaId: privateFixture ? 'pines.fixture.httpbingo-private' : 'pines.fixture.httpbingo', version: 1}], chatgptClaims, chatgptIdentity, extensionId: identity.id};
+if(config.qualificationResponseMetadata)(await import('./src/replay-metadata.mjs')).metadataConfiguration(config);
 await rm(out, {recursive: true, force: true}); await mkdir(out);
 await cp(join(here, 'src'), out, {recursive: true});
+// Shared wire-policy code must be inside the installed package; raw source
+// imports cannot escape the extension root after Chrome installs the build.
+await build({entryPoints: [join(here, 'src/session-timing.js')], bundle: true, format: 'esm', platform: 'browser', target: 'chrome116', outfile: join(out, 'session-timing.js'), logLevel: 'warning'});
+await build({entryPoints: [join(here, 'src/region-preference.mjs')], bundle: true, format: 'esm', platform: 'browser', target: 'chrome116', outfile: join(out, 'region-preference.mjs'), logLevel: 'warning'});
 if (tee) {
   await build({entryPoints: [join(here, 'src/tee-worker.js')], bundle: true, format: 'esm', platform: 'browser', target: 'chrome141', external: ['./config.js', './wasm/tlsn_wasm.js'], outfile: join(out, 'tee-worker.js'), logLevel: 'warning'});
   await cp(join(root, 'tools/tee-native/attestation-wasm/pkg/pines_nitro_validation_bg.wasm'), join(out, 'nitro-validation.wasm'));
@@ -117,12 +148,20 @@ await writeFile(registryFile, registrySource);
 // tsc also emitted the registry's JSON (schemas/schemas/*.json). It is inlined above, so nothing loads it, and the
 // Chrome Web Store refuses a package with a second manifest.json (the registry's pins) anywhere in it.
 await rm(join(out, 'schemas/schemas'), {recursive: true, force: true});
-await cp(dirname(fileURLToPath(import.meta.resolve('tlsn-wasm'))), join(out, 'wasm'), {recursive: true});
+let wasmRuntime;
+if (tee) {
+  wasmRuntime = await copyPinnedWasm({source: join(here, 'wasm-io'), destination: join(out, 'wasm'),
+    pin: JSON.parse(await readFile(join(here, 'config/tee-wasm-io.json'), 'utf8')),
+    patchFile: join(here, 'patches/0001-await-io-write.patch')});
+} else await cp(dirname(fileURLToPath(import.meta.resolve('tlsn-wasm'))), join(out, 'wasm'), {recursive: true});
 await writeFile(join(out, 'config.js'), `export default ${JSON.stringify(config, null, 2)};\n`);
 const listedVerifiers = [...legacyVerifiers, ...testVerifiers];
 const connectSources = [...(tee ? [] : ['https://*.verifier.pines.family', 'wss://*.verifier.pines.family']), ...listedVerifiers.flatMap(value => [value, value.replace(/^http/, 'ws')])];
+if(config.qualificationResponseMetadata?.receiver)connectSources.push(new URL(config.qualificationResponseMetadata.receiver).origin);
+// Only the dedicated entry zone: channel sockets and credential-free latency probes. Never `*.pines.family`.
+if(tee?.regionalEntry)connectSources.push(...regionalConnectSources(tee.regionalEntry.suffix));
 const manifest = {
-  manifest_version: 3, minimum_chrome_version: '141', name: teeFixture ? 'Pines Verifier HARDWARE FIXTURE' : 'Pines Verifier', version: tee ? publicRelease ? '1.2.2' : '1.2.0' : '0.9.3', key: identity.key,
+  manifest_version: 3, minimum_chrome_version: '141', name: qualification ? 'Pines Verifier LOCAL QUALIFICATION' : teeFixture ? 'Pines Verifier HARDWARE FIXTURE' : 'Pines Verifier', version: qualification ? qualification.version : tee ? '1.4.0' : '0.9.3', key: identity.key,
   icons: {16: 'icons/icon-16.png', 32: 'icons/icon-32.png', 48: 'icons/icon-48.png', 128: 'icons/icon-128.png'},
   description: tee ? 'Verify your ChatGPT, Claude or Grok subscription privately with native TLSNotary and an attested AWS enclave.' : claude || grok ? `Prove your paid ${['ChatGPT', ...(claude ? ['Claude'] : []), ...(grok ? ['Grok'] : [])].join(', ').replace(/, ([^,]+)$/, ' or $1')} subscription to Pines with a zkTLS proof.` : chatgptClaims || chatgptIdentity ? 'Prove your paid ChatGPT subscription to Pines with a zkTLS proof.' : 'Review disclosures and create non-claimable TLSNotary Proxy pilot receipts.',
   background: {service_worker: 'background.js', type: 'module'},
@@ -136,7 +175,13 @@ const manifest = {
 await writeFile(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 await build({entryPoints: [join(here, 'client.mjs')], bundle: true, format: 'esm', platform: 'browser', target: 'chrome116', outfile: join(out, 'client.mjs'), logLevel: 'warning'});
 await cp(join(here, 'client.d.mts'), join(out, 'client.d.mts'));
-for (const name of ['README.md', 'PROVENANCE.md']) await cp(join(here, 'package', name), join(out, name));
-await cp(join(here, 'UPSTREAM_LICENSE.md'), join(out, 'UPSTREAM_LICENSE.md'));
-await writeFile(join(out, 'build.json'), JSON.stringify({...config, sourceRevision, sourceDirty, wasmSha256: createHash('sha256').update(await readFile(join(out, 'wasm/tlsn_wasm_bg.wasm'))).digest('hex')}, null, 2) + '\n');
+for (const name of ['README.md', 'PROVENANCE.md', 'UPSTREAM_LICENSE.md']) await cp(join(here, name), join(out, name));
+const publishedConfig=structuredClone(config);
+// The installed runtime needs this dedicated capability. Published metadata
+// describes its scope without copying the token into reports or log output.
+if(publishedConfig.qualificationResponseMetadata)delete publishedConfig.qualificationResponseMetadata.receiverToken;
+await writeFile(join(out, 'build.json'), JSON.stringify({...publishedConfig, sourceRevision, sourceDirty,
+  ...(qualification ? {qualificationOnly:true,qualification:qualification.declaration} : {}),
+  ...(wasmRuntime ? {wasmRuntime} : {}),
+  wasmSha256: createHash('sha256').update(await readFile(join(out, 'wasm/tlsn_wasm_bg.wasm'))).digest('hex')}, null, 2) + '\n');
 console.log(`Built ${identity.id}: Proxy, ${config.schemas.map(schema => `${schema.schemaId}@${schema.version}`).join(' + ')}, ${verifierRevision}`);

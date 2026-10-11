@@ -1,5 +1,5 @@
 import { requireThat } from "./errors.ts";
-import { requestTarget } from "./schema.ts";
+import { acceptEncoding, matchRequestTarget } from "./schema.ts";
 import { validateHeader } from "./capture.ts";
 import type { Range, VerificationSchema, VerifiedBytes } from "./types.ts";
 
@@ -58,8 +58,12 @@ export function inspectDisclosedRequest(
     }
     return new TextDecoder().decode(new Uint8Array(value));
   };
-  requireThat(publicLine(false) === `${schema.request.method} ${requestTarget(schema)} HTTP/1.1`, "SCOPE_MISMATCH");
-  const fixed = { ...schema.replay.headers, host: new URL(schema.request.origin).host, "accept-encoding": "identity", connection: "close" };
+  // The start line is matched against the declared template through the one shared
+  // matcher, so the authenticated path parameter is proven here and nowhere else.
+  const startLine = /^([A-Z]+) (\S+) HTTP\/1\.1$/.exec(publicLine(false));
+  requireThat(startLine && startLine[1] === schema.request.method, "SCOPE_MISMATCH");
+  matchRequestTarget(schema, startLine![2]!);
+  const fixed = { ...schema.replay.headers, host: new URL(schema.request.origin).host, "accept-encoding": acceptEncoding(schema), connection: "close" };
   const rules = new Map([...schema.capture.headers, ...cookieRule].map(rule => [rule.name, rule]));
   const allowed = new Set([...Object.keys(fixed), "content-length", ...rules.keys()]);
   const seen = new Set<string>(), publicHeaders = new Map<string, string>();
@@ -94,6 +98,13 @@ export function inspectDisclosedRequest(
     }
   }
   requireThat(cursor === length && slots.length === hidden.size, "SCOPE_MISMATCH");
+  // Revealed request bytes are the pre-ZK cost of this direction, so they are bounded
+  // independently of the total: a hidden credential is free, a revealed one is not.
+  if (schema.limits.maxRevealedSentBytes !== undefined) {
+    let revealedSent = length;
+    for (const range of hidden.values()) revealedSent -= range.end - range.start;
+    requireThat(revealedSent <= schema.limits.maxRevealedSentBytes, "REVEALED_LIMIT_EXCEEDED");
+  }
   for (const [name, value] of Object.entries(fixed)) requireThat(publicHeaders.get(name) === value, "SCOPE_MISMATCH");
   for (const rule of [...schema.capture.headers, ...cookieRule]) {
     requireThat(seen.has(rule.name) || !rule.required, "SCOPE_MISMATCH");

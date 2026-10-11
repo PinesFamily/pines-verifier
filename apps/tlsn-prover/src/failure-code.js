@@ -1,5 +1,6 @@
 // Closed vocabulary from the owned proof worker. Never preserve or render a
 // raw exception, provider value, or an arbitrary string that merely looks like a code.
+import {REPLAY_METADATA_FAILURES} from './qualification-metadata-channel.mjs';
 const localFailures = new Set([
   'PROOF_FAILED', 'WORKER_FAILED', 'ISOLATION_REQUIRED', 'INELIGIBLE_PLAN',
   'TEE_ATTESTATION_INIT_FAILED', 'TEE_CHANNEL_FAILED', 'TEE_NATIVE_INIT_FAILED',
@@ -7,7 +8,11 @@ const localFailures = new Set([
   'TEE_DISCLOSURE_FAILED', 'TEE_PROOF_FAILED',
   'HARDWARE_PROFILE_UNQUALIFIED', 'PROVIDER_INVENTORY_UNQUALIFIED',
   'UNQUALIFIED_FIELD', 'UNQUALIFIED_HEADER', 'PROVIDER_HTTP_401', 'PROVIDER_HTTP_403',
-  'PROVIDER_HTTP_429', 'PROVIDER_RESPONSE_UNSUPPORTED', 'ADMISSION_REFUSED',
+  'PROVIDER_HTTP_429', 'PROVIDER_RESPONSE_UNSUPPORTED', 'PROVIDER_RESPONSE_TOO_LARGE', 'ADMISSION_REFUSED',
   'CHANNEL_REFUSED', 'TICKET_EXPIRED', 'PROOF_TIMEOUT', 'WORKER_RESTARTED',
+  'SESSION_POLICY_UNSUPPORTED', 'SESSION_POLICY_INVALID', ...REPLAY_METADATA_FAILURES,
+  'DISCLOSURE_POLICY', 'DISCLOSURE_POLICY_BINDING', 'DISCLOSURE_LIMIT', 'DISCLOSURE_REQUEST_RANGES', 'FULL_RESPONSE_REQUIRED',
+  // private-headers-gzip-v1 (plan D14; src/private-headers.mjs maps the schema package's codes onto these).
+  'RESPONSE_ENCODING_UNSUPPORTED', 'RESPONSE_REVEAL_LIMIT', 'RESPONSE_ENCODED_INVALID', 'CLAUDE_ORG_MISMATCH', 'CLAUDE_ORG_UNAVAILABLE', 'CLAUDE_ORG_INELIGIBLE',
 ]);
 export const localFailureCode = value => typeof value === 'string' && localFailures.has(value) ? value : null;

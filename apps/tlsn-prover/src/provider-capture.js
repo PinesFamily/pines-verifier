@@ -45,7 +45,7 @@ export class ProviderCapture {
       check(new URL(url).origin === schema.request.origin, 'CAPTURE_OWNER_CHANGED');
       lease.session = await providerLease({browser: this.#browser, schema,
         owner: {runId: job.runId, tabId: tab.id, windowId: tab.windowId}, url,
-        deadline: Math.min(Date.now() + 30000, job.captureExpiresAt),
+        deadline: Math.min(Date.now() + 30000, job.captureExpiresAt), requireResponse: job.upfrontConsent === true,
         navigate: () => this.#browser.tabs.update(tab.id, {url, active: true}).catch(() => {throw Error('PROVIDER_OPEN_FAILED');}),
         onOwner: owner => {if (this.#live(lease)) void this.#owner(job, owner);},
         onChange: state => {
@@ -69,6 +69,6 @@ export class ProviderCapture {
   }
   async #reject(lease, code) {
     if (!this.#live(lease)) return; this.cancel();
-    await this.#fail(/^CAPTURE_[A-Z_]+$/.test(code ?? '') || code === 'TICKET_EXPIRED' ? code : 'CAPTURE_UNAVAILABLE');
+    await this.#fail(/^CAPTURE_[A-Z_]+$/.test(code ?? '') || ['TICKET_EXPIRED', 'PROVIDER_SIGN_IN_REQUIRED', 'PROVIDER_HTTP_401', 'PROVIDER_HTTP_403', 'PROVIDER_HTTP_429', 'CLAUDE_ORG_UNAVAILABLE'].includes(code) ? code : 'CAPTURE_UNAVAILABLE');
   }
 }

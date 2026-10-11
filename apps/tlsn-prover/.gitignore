@@ -3,3 +3,4 @@ dist-capture/
 reports/
 node_modules/
 release/
+wasm-io/

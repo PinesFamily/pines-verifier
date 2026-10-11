@@ -23,13 +23,23 @@ function shape(value, spec, depth = 0) {
     if (typeof value === 'number') check(Number.isFinite(value), 'UNQUALIFIED_FIELD');
   }
 }
-export function inspectProviderShape(message, inventory) {
+// `responseDisclosure` is the selected policy's mode, never a local choice.
+export function inspectProviderShape(message, inventory, responseDisclosure = 'selective') {
+  check(['selective', 'complete', 'private-headers'].includes(responseDisclosure), 'DISCLOSURE_POLICY');
   check(inventory?.qualified === true && inventory.version === 1, 'PROVIDER_INVENTORY_UNQUALIFIED');
   check(message.startLine === 'HTTP/1.1 200 OK', 'RESPONSE_STATUS');
   check(['application/json', 'application/json; charset=utf-8', 'application/json;charset=utf-8']
     .includes(headerValue(message, 'content-type')?.toLowerCase()), 'CONTENT_TYPE');
-  check(headerValue(message, 'content-encoding') === undefined, 'CONTENT_ENCODING');
-  for (const h of message.headers) check(inventory.responseHeaders.includes(h.name), 'UNQUALIFIED_HEADER');
+  // A content coding is admitted only under the policy whose inventories were written
+  // for it, and only as exactly gzip. The body reaching here is already decoded by the
+  // schema package's single decode point, which bounded the decoded size first.
+  const encoding = headerValue(message, 'content-encoding');
+  check(encoding === undefined || (responseDisclosure === 'private-headers' && encoding.toLowerCase() === 'gzip'), 'CONTENT_ENCODING');
+  // In complete-response mode the owner consents to every bounded HTTP header,
+  // including opaque values. HTTP/framing and body-schema validation still apply.
+  // Under private headers the values are hidden but the NAMES are public, so the
+  // allowlist still refuses an unknown header.
+  if (responseDisclosure !== 'complete') for (const h of message.headers) check(inventory.responseHeaders.includes(h.name), 'UNQUALIFIED_HEADER');
   const root = parseJson(utf8(message.body), 32); shape(root, inventory.body);
   return root;
 }

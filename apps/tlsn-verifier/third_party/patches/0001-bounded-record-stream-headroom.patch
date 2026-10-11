@@ -1,0 +1,14 @@
+--- a/crates/tlsn/src/session.rs
++++ b/crates/tlsn/src/session.rs
+@@ -49,6 +49,11 @@
+     pub fn new(io: Io) -> Self {
+         let mut mux_config = tlsn_mux::Config::default();
+ 
++        // Pines permits up to 1024 TLS records in a bounded proof. Their tag
++        // circuits can keep more than 512 mux streams alive while remote close
++        // messages are in flight. Keep a finite allowance for that burst; the
++        // existing receive window and the caller's byte/memory caps still apply.
++        mux_config.set_max_num_streams(2048);
+         mux_config.set_keep_alive(true);
+         mux_config.set_close_sync(true);
+ 

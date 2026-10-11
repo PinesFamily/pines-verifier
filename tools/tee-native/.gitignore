@@ -3,5 +3,3 @@ state/
 attestation-wasm/target/
 attestation-wasm/pkg/
 hardware/runtime/target/
-node_modules/
-reproduce/out/

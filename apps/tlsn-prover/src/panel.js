@@ -5,6 +5,7 @@ import {progressOf, stepsFor, failureHelp, failureDiagnostic, providerOf, receip
 import {mountOrb} from './orb.js';
 import {retryCopy} from './retry.js';
 import {nativePlanLabel} from './tee-provider.mjs';
+import {teeCopy} from './consent-copy.mjs';
 
 // The side panel (Pines Verifier): the welcome screen while no verification runs in this window, and a run as three
 // task rows under the provider it checks, each opening onto what is happening inside it. It asks the background
@@ -14,6 +15,8 @@ const panel = document.querySelector('.panel');
 // The review, held here: it moves into the second step whenever the steps are drawn again for another provider.
 const disclosure = node('disclosure');
 const guided = config.chatgptClaims || config.chatgptIdentity;
+// The sharing copy for the signed disclosure policy every ticket of this build carries.
+const tee = config.tee ? teeCopy(config.tee.disclosurePolicy) : null;
 let runId;
 let actionError;
 let busy = false;
@@ -47,7 +50,7 @@ function show(schemaId) {
     const item = document.createElement('li');
     item.className = 'task';
     item.innerHTML = `<button type="button" class="task-head" aria-expanded="false"><span class="task-mark"></span><span class="task-title"></span><span class="task-meta"></span><span class="task-chevron">${icons.chevron}</span></button><div class="task-body"><div class="task-clip"><div class="task-content"><div class="task-rows"></div></div></div></div>`;
-    item.querySelector('.task-title').textContent = label;
+    item.querySelector('.task-title').textContent = config.tee && index === 1 ? 'Authorize verification' : label;
     item.querySelector('.task-head').addEventListener('click', () => {
       openBy.set(index, item.dataset.open !== 'true');
       void refresh();
@@ -56,8 +59,8 @@ function show(schemaId) {
   }));
   // The review is the second step's inside.
   node('progress').children[1].querySelector('.task-rows').replaceWith(disclosure);
-  // Evaluated rows summarize the plan; the complete response is still disclosed (0.8.0 privacy scope).
-  node('sharing').textContent = config.tee ? 'Your complete account response is encrypted and checked inside a protected AWS enclave, a trusted execution environment (TEE). Pines receives only your plan and a hashed account identifier. Login tokens and cookies stay hidden from both Pines and the TEE.' : `The full response from ${host} is shared, including any email, names or billing IDs it contains. Review it below. Your login token and cookies stay hidden.`;
+  // Evaluated rows summarize the plan; what the TEE sees follows the build's disclosure policy (consent-copy.mjs).
+  node('sharing').textContent = tee ? tee.sharing : `The full response from ${host} is shared, including any email, names or billing IDs it contains. Review it below. Your outgoing login token and cookies stay hidden.`;
   node('sharing').hidden = false;
   node('capture-start').textContent = `Open ${provider.name} and capture`;
 }
@@ -121,9 +124,13 @@ function showSummary() {
   if (previewShown || summaryShown) return;
   summaryShown = true;
   node('shared-rows').replaceChildren();
-  reviewRow('Plan details', 'Shared', 'ok');
-  if (config.chatgptIdentity) reviewRow('Verified for', '30 days', 'ok');
-  reviewRow('Login token and cookies', 'Hidden', 'hidden');
+  if (tee) {
+    reviewRow(...tee.response, 'hidden');
+    if (tee.headers) reviewRow(...tee.headers, 'hidden');
+    reviewRow('Pines receives', 'Plan and hashed ID');
+  } else reviewRow('Plan details', 'Shared', 'ok');
+  if (config.chatgptIdentity && !config.tee) reviewRow('Verified for', '30 days', 'ok');
+  reviewRow('Outgoing token and cookies', 'Hidden', 'hidden');
   disclosure.querySelector('details').hidden = true;
 }
 // Kept once shown: after Share and verify the worker drops the preview, and the done step still opens onto it.
@@ -135,8 +142,9 @@ function showPreview(preview) {
     previewShown = preview.plan;
     node('shared-rows').replaceChildren();
     reviewRow('Plan to verify', label);
-    reviewRow('Account details', 'TEE only', 'hidden');
-    reviewRow('Login tokens and cookies', 'Hidden', 'hidden');
+    reviewRow(...tee.details, 'hidden');
+    if (tee.headers) reviewRow(...tee.headers, 'hidden');
+    reviewRow('Outgoing token and cookies', 'Hidden', 'hidden');
     disclosure.querySelector('details').hidden = true;
     node('preview').textContent = '';
     return;
@@ -154,7 +162,7 @@ function showPreview(preview) {
   for (const {label, value} of rows) reviewRow(label, fit(value), 'ok');
   if (!rows.length) reviewRow('Plan details', 'Shared', 'ok');
   if (config.chatgptIdentity) reviewRow('Verified for', '30 days', 'ok');
-  reviewRow('Login token and cookies', 'Hidden', 'hidden');
+  reviewRow('Outgoing token and cookies', 'Hidden', 'hidden');
   const pretty = data === undefined ? body : JSON.stringify(data, null, 2);
   node('preview').textContent = `${preview.request.trim()}\n\n${head.trim()}\n\n${pretty}`;
 }
@@ -181,6 +189,11 @@ async function refresh() {
     node('heading').textContent = retry?.title ?? progress.title;
     node('description').textContent = retry?.description ?? progress.description;
     node('description').hidden = !(retry?.description ?? progress.description);
+    const timedSession = running && state.phase !== 'completed' && Number.isSafeInteger(state.sessionBudgetMs);
+    const sessionRemaining = Math.min(state.deadline - Date.now(), state.sessionBudgetMs ?? Infinity);
+    node('session-time').hidden = !timedSession;
+    node('session-time').textContent = timedSession
+      ? `Total session: ${clock(sessionRemaining)} left of ${clock(state.sessionBudgetMs)} for setup and proof.` : '';
     const diagnostic = failureDiagnostic(state);
     node('failure-code').textContent = diagnostic;
     node('failure-code').hidden = !diagnostic;
@@ -193,6 +206,15 @@ async function refresh() {
     badge.dataset.tone = progress.complete ? 'done' : progress.recovery && !progress.stopped ? 'wait' : 'error';
     badge.innerHTML = progress.complete ? icons.check : icons.alert;
 
+    if (config.tee && ['awaiting-consent', 'ready'].includes(state.phase) && !summaryShown) {
+      summaryShown = true;
+      node('shared-rows').replaceChildren();
+      reviewRow(...tee.response, 'hidden');
+      if (tee.headers) reviewRow(...tee.headers, 'hidden');
+      reviewRow('Pines receives', 'Plan and hashed ID');
+      reviewRow('Outgoing token and cookies', 'Hidden', 'hidden');
+      disclosure.querySelector('details').hidden = true;
+    }
     showPreview(state.preview);
     if (progress.step > 1) showSummary();
     const steps = node('progress');
@@ -227,9 +249,9 @@ async function refresh() {
       item.dataset.opens = String(opens);
       item.querySelector('.task-head').setAttribute('aria-expanded', String(open));
       // The review waits on the visitor too, for Share and verify: its time left wears the same light.
-      item.dataset.waiting = String(index === 1 && active && phase === 'awaiting-disclosure');
+      item.dataset.waiting = String(index === 1 && active && ['awaiting-disclosure', 'awaiting-consent'].includes(phase));
       item.querySelector('.task-meta').textContent = index === 0 ? host
-        : index === 1 ? active && state.deadline ? clock(state.deadline - Date.now()) : done ? 'Shared' : ''
+        : index === 1 ? config.tee ? (done ? 'Authorized' : phase === 'ready' ? 'Starting…' : 'Your consent') : active && state.deadline ? `${clock(sessionRemaining)} total left` : done ? 'Shared' : ''
         : '';
     });
 
@@ -241,7 +263,8 @@ async function refresh() {
     node('capture-help').textContent = state.captureActive ? `Refresh usage on the ${provider.name} page now. Keep that tab open.` : `Open a new ${provider.name} tab, then refresh usage within 30 seconds.`;
     node('privacy-note').hidden = !guided || progress.step !== 0 || !running;
 
-    node('approve').hidden = !reviewing;
+    node('approve').hidden = Boolean(config.tee) || !reviewing;
+    node('consent').hidden = !config.tee || phase !== 'awaiting-consent';
     node('continue').hidden = !progress.complete;
     node('recover').hidden = !(progress.recovery || progress.stopped);
     node('cancel').hidden = ['completed', 'cancelled', 'failed'].includes(state.phase);
@@ -269,7 +292,7 @@ node('allow-access').addEventListener('click', async () => {
   } catch { actionError = 'Chrome could not request access. Click Allow access again, or cancel.'; }
   finally { busy = false; node('allow-access').disabled = false; void refresh(); }
 });
-for (const [id, type] of [['capture-start', 'panel-capture'], ['approve', 'panel-approve'], ['cancel', 'panel-cancel'], ['continue', 'panel-continue'], ['recover', 'panel-recover']]) node(id).addEventListener('click', async () => {
+for (const [id, type] of [['consent', 'panel-consent'], ['capture-start', 'panel-capture'], ['approve', 'panel-approve'], ['cancel', 'panel-cancel'], ['continue', 'panel-continue'], ['recover', 'panel-recover']]) node(id).addEventListener('click', async () => {
   if (!runId || busy) return;
   actionError = undefined; busy = true; node(id).disabled = true;
   try { const result = await send(type, {runId}); if (!result?.ok) actionError = failureHelp(result?.error, undefined, shown); }

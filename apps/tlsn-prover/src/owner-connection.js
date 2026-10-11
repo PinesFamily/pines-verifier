@@ -12,22 +12,39 @@ export class OwnerConnections {
       const previous = this.#ports.get(owner.documentId);
       if (!previous && this.#ports.size >= 128) {port.disconnect(); return;}
       const entry = {owner, port, pending: new Map()}; this.#ports.set(owner.documentId, entry); previous?.port.disconnect();
-      port.onMessage.addListener(message => {if (typeof message?.nonce === 'string') entry.pending.get(message.nonce)?.(true);});
+      port.onMessage.addListener(message => {if (typeof message?.nonce === 'string') entry.pending.get(message.nonce)?.receive(message);});
       port.onDisconnect.addListener(() => {
         if (this.#ports.get(owner.documentId) === entry) {this.#ports.delete(owner.documentId); this.#lost(owner);}
-        for (const finish of entry.pending.values()) finish(false);
+        for (const request of entry.pending.values()) request.finish(null);
       });
     });
   }
   async live(owner) {
+    return await this.#request(owner, {}, message => Object.keys(message).length === 1 ? true : undefined) === true;
+  }
+  async cancelAttempt(owner, {runId, attemptId, recipient}, signal) {
+    return this.#request(owner, {type: 'cancel-attempt', runId, attemptId, recipient}, message => {
+      if (Object.keys(message).length !== 3 || message.type !== 'cancel-attempt-result'
+        || !['recorded', 'completed', 'terminal', 'refused'].includes(message.outcome)) return undefined;
+      return message.outcome;
+    }, {signal, timeoutMs: 2000});
+  }
+  async #request(owner, payload, decode, {signal, timeoutMs = 3000} = {}) {
     const entry = this.#ports.get(owner?.documentId);
-    if (!entry || entry.pending.size >= 16 || !owns(entry.owner, owner)) return false;
+    if (signal?.aborted || !entry || entry.pending.size >= 16 || !owns(entry.owner, owner)) return null;
     const nonce = crypto.randomUUID();
     return new Promise(resolve => {
-      const finish = ok => {clearTimeout(timer); entry.pending.delete(nonce); resolve(ok && this.#ports.get(owner.documentId) === entry);};
-      const timer = setTimeout(() => finish(false), 3000);
-      entry.pending.set(nonce, finish);
-      try {entry.port.postMessage({nonce});} catch {finish(false);}
+      let done = false;
+      const abort = () => finish(null);
+      const finish = result => {
+        if (done) return; done = true;
+        clearTimeout(timer); signal?.removeEventListener('abort', abort); entry.pending.delete(nonce);
+        resolve(this.#ports.get(owner.documentId) === entry ? result : null);
+      };
+      const timer = setTimeout(() => finish(null), timeoutMs);
+      entry.pending.set(nonce, {finish, receive(message) {const result = decode(message); if (result !== undefined) finish(result);}});
+      signal?.addEventListener('abort', abort, {once: true});
+      try {entry.port.postMessage({nonce, ...payload});} catch {finish(null);}
     });
   }
 }

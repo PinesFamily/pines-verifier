@@ -1,4 +1,5 @@
 import config from './config.js';
+import {Preparation, UPFRONT_CONSENT_VERSION} from './preparation.js';
 import {providerPermission, checkProviderPermission} from './provider-permission.js';
 import {ProviderCapture} from './provider-capture.js';
 import {ProviderFlow} from './provider-flow.js';
@@ -8,12 +9,22 @@ import {linkedWalletOf} from './binding-error.mjs';
 import {admissionErrors, retryTime} from './retry.js';
 import {OwnerConnections} from './owner-connection.js';
 import {localFailureCode} from './failure-code.js';
-const guided = config.chatgptClaims || config.chatgptIdentity;
+import {sessionSnapshot, SESSION_POLICY_SUPPORT} from './session-timing.js';
+import {qualificationMetadataStore} from './qualification-metadata-store.mjs';
+import {metadataPersistenceFailureCode} from './qualification-metadata-channel.mjs';
+import {regionPreference} from './region-preference.mjs';
+const guided = Boolean(config.tee) || config.chatgptClaims || config.chatgptIdentity;
+const storeReplayMetadata=config.qualificationResponseMetadata?qualificationMetadataStore(chrome,config):null;
+// Regional entry builds only: advisory latency order for the page's attempt request.
+const preferredRegions=config.tee?.regionalEntry?regionPreference({suffix:config.tee.regionalEntry.suffix}):null;
+const metadataRetry='pines-qualification-metadata-retry';
+async function scheduleMetadataRetry(result){if(result.pending>0)await chrome.alarms.create(metadataRetry,{delayInMinutes:0.5});}
 
 // Every schema this build carries, digest-pinned by the packaged registry. A run
 // uses the one its admitted attempt names; each provider keeps its own flow.
 const registered = loadRegistry().then(registry => buildEntries(registry, config));
 let job;
+let preparation;
 let starting = false;
 let creating;
 let closing;
@@ -30,7 +41,12 @@ const owners = new OwnerConnections(chrome, config.origins, owner => {
   void ready.then(() => {if (job && owns(job.owner, owner)) return cancel('cancelled', 'OWNER_LEFT', {spareRevealed: true});});
 });
 const capture = new ProviderCapture({browser: chrome, current: () => job, ownerReady: owner => owners.live(owner),
-  deliver: async (runId, replay) => { const result = await offscreen({type: 'replay', runId, replay}); check(result?.ok, 'WORKER_UNAVAILABLE'); },
+  deliver: async (runId, replay) => {
+    if (config.tee) {
+      check(job?.runId === runId && job.preparing && preparation, 'STALE_RUN');
+      preparation.captured(job, replay); updatePhase('awaiting-consent'); await persist();
+    } else {const result = await offscreen({type: 'replay', runId, replay}); check(result?.ok, 'WORKER_UNAVAILABLE');}
+  },
   fail: code => cancel('failed', code),
   owner: async (current, owner) => { if (job === current && !terminal(current.phase)) { if (owner) job.providerOwner = owner; else delete job.providerOwner; await persist(); } },
 });
@@ -68,28 +84,65 @@ async function ensureOffscreen() {
   creating = (async () => { if (!(await contexts()).length) await chrome.offscreen.createDocument({url: 'offscreen.html', reasons: ['WORKERS'], justification: 'Run the Pines TLSNotary proof in a dedicated WASM worker.'}); })();
   try { await creating; } finally { creating = undefined; }
 }
-// `spareRevealed`: the page stopped (its Cancel, a reload, navigation, a wallet change). After Share and verify the
-// user has consented and the verifier may already hold the result, so a revealed run is left to finish; only the
-// panel's own Cancel, a deadline or a failure aborts it.
-async function cancel(phase = 'cancelled', error = null, {spareRevealed = false} = {}) {
+// Legacy ordinary proofs spare an already revealed run when its page leaves.
+// Upfront-consented TEE runs cancel their worker on page/wallet loss too; durable
+// settlement still belongs to the authenticated enclave/API outcome.
+async function cancel(phase = 'cancelled', error = null, {spareRevealed = false, completedReceipt = false} = {}) {
   if (!job) return;
   // A finished proof may already have a durable API receipt. Report that the
   // page stopped waiting without relabeling that proof as cancelled or verified.
   if (job.phase === 'completed' && !job.receiptVerified) { job.receiptWaitStopped = true; await persist(); return; }
-  if (spareRevealed && job.phase === 'proving') { job.receiptWaitStopped = true; await persist(); return; }
+  if (spareRevealed && !job.upfrontConsent && job.phase === 'proving') { job.receiptWaitStopped = true; await persist(); return; }
   if (terminal(job.phase)) return;
+  // The same owner page found an authoritative saved result while requesting a
+  // stop. Retire local work without claiming it was cancelled or acknowledging
+  // receipt verification; normal API/saved-record polling still does the latter.
+  if (completedReceipt) {phase = 'completed'; job.receiptWaitStopped = true;}
+  preparation?.cancel(); preparation = undefined;
   capture.cancel();
   const runId = job.runId; updatePhase(phase, error); await persist();
   if ((await contexts()).length) await offscreen({type: 'cancel', runId}).catch(() => {});
   await closeOffscreen();
 }
+let panelCancellation;
+async function cancelFromPanel() {
+  const current = job;
+  if (!current || !current.upfrontConsent || current.preparing || !UUID.test(current.attemptId) || terminal(current.phase)) return cancel();
+  if (panelCancellation?.job === current) return panelCancellation.promise;
+  const operation = {job: current};
+  operation.promise = (async () => {
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 2000);
+    const epoch = navigation.get(current.owner.tabId);
+    const waiting = (async () => {
+      await flow.focusOwnerForCancellation(current, abort.signal);
+      if (abort.signal.aborted || job !== current || navigation.get(current.owner.tabId) !== epoch) return null;
+      return owners.cancelAttempt(current.owner, {runId: current.runId, attemptId: current.attemptId, recipient: current.recipient}, abort.signal);
+    })().catch(() => null);
+    const expired = new Promise(resolve => abort.signal.addEventListener('abort', () => resolve(null), {once: true}));
+    let outcome;
+    try {outcome = await Promise.race([waiting, expired]);}
+    finally {clearTimeout(timeout); abort.abort();}
+    if (job !== current) return;
+    current.cancellationRecorded = outcome === 'recorded';
+    await cancel('cancelled', null, {completedReceipt: outcome === 'completed'});
+  })().finally(() => {if (panelCancellation === operation) panelCancellation = undefined;});
+  panelCancellation = operation;
+  return operation.promise;
+}
 async function reconcile(preview = false) {
   const current = job;
   if (!current || terminal(current.phase)) return null;
-  if (current.deadline <= Date.now()) { await cancel('failed', 'PROOF_TIMEOUT'); return null; }
+  if (current.deadline <= Date.now()) { await cancel('failed', current.preparing ? 'PREPARATION_EXPIRED' : 'PROOF_TIMEOUT'); return null; }
   if (starting) return null;
   if (!await permissionReady(current) && terminal(current.phase)) return null;
-  if (current.preparing) {await persist(); return null;}
+  if (current.preparing) {
+    if (current.upfrontConsent) {
+      try {preparation.validate(current);} catch {await cancel('failed', 'PREPARATION_EXPIRED'); return null;}
+      advance(current);
+    }
+    await persist(); return null;
+  }
   const available = await contexts();
   if (job !== current || terminal(current.phase) || starting) return null;
   if (!available.length) { await cancel('failed', 'WORKER_RESTARTED'); return null; }
@@ -114,7 +167,7 @@ async function permissionReady(current) {
   }
 }
 function advance(current) {
-  if (job !== current || current.preparing || !current.automaticCapture || terminal(current.phase)) return;
+  if (job !== current || current.preparing && !current.upfrontConsent || !current.automaticCapture || terminal(current.phase)) return;
   if (current.phase === 'awaiting-capture') {
     void registered.then(async entries => {
       if (!await permissionReady(current)) { if (job === current) await persist(); return; }
@@ -136,6 +189,10 @@ async function start(message, owner, epoch) {
     check(!terminal(prepared.phase) && prepared.deadline > Date.now(), 'CANCELLED');
     check(prepared.recipient === recipientOf(message.recipient), 'RECIPIENT_CHANGED');
     check(await permissionReady(prepared), 'PERMISSION_REVOKED');
+    if (config.tee) {
+      check(prepared.phase === 'ready' && preparation, 'CONSENT_REQUIRED');
+      preparation.validate(prepared); await capture.validate(prepared);
+    }
   }
   check(await owners.live(owner), 'OWNER_LEFT');
   check(navigation.get(owner.tabId) === epoch, 'STALE_DOCUMENT');
@@ -146,8 +203,9 @@ async function start(message, owner, epoch) {
   try {
     const recipient = recipientOf(message.recipient);
     const entry = entryOf(await registered, message.attempt?.schema);
-    if (prepared) check(prepared.schema.digest === entry.reference.digest, 'SCHEMA_UNAVAILABLE');
-    const assignment = assignmentOf(message.attempt, validateAttempt(message.attempt, recipient, entry.reference, entry.schema, config));
+    if (prepared) check(['schemaId', 'version', 'digest'].every(key => prepared.schema[key] === entry.reference[key]), 'SCHEMA_UNAVAILABLE');
+    const ticket = validateAttempt(message.attempt, recipient, entry.reference, entry.schema, config);
+    const assignment = assignmentOf(message.attempt, ticket);
     if (guided) {
       const intent = panelIntents.get(owner.documentId);
       panelIntents.delete(owner.documentId);
@@ -156,7 +214,12 @@ async function start(message, owner, epoch) {
     }
     check(navigation.get(owner.tabId) === epoch, 'STALE_DOCUMENT');
     check(!prepared || job === prepared && !terminal(prepared.phase) && prepared.deadline > Date.now(), 'CANCELLED');
-    current = {runId: crypto.randomUUID(), owner, recipient, attemptId: message.attempt.attemptId, schema: entry.reference, verifier: assignment, captureExpiresAt: message.attempt.expiresAt, phase: 'initializing', startedAt: Date.now(), automaticCapture: guided === true, permissionGranted: prepared?.permissionGranted === true, deadline: Math.min(Date.now() + entry.schema.limits.sessionTimeoutMs, message.attempt.resultExpiresAt), error: null};
+    // A server policy edit, another start message or a worker restart cannot
+    // reset the signed total. Admission/capture retain their shorter windows.
+    const timing = config.tee ? sessionSnapshot(message.attempt) : null;
+    const replay = config.tee ? preparation.take(prepared, message.executionId) : undefined;
+    if (config.tee) preparation = undefined;
+    current = Object.assign(config.tee ? prepared : {}, {runId: config.tee ? prepared.runId : crypto.randomUUID(), owner, recipient, attemptId: message.attempt.attemptId, schema: entry.reference, verifier: assignment, captureExpiresAt: message.attempt.expiresAt, phase: 'initializing', startedAt: timing ? ticket.issuedAt : Date.now(), automaticCapture: guided === true, permissionGranted: prepared?.permissionGranted === true, deadline: timing ? timing.sessionExpiresAt : Math.min(Date.now() + entry.schema.limits.sessionTimeoutMs, message.attempt.resultExpiresAt), ...(timing ?? {}), error: null, preparing: false, upfrontConsent: Boolean(config.tee)});
     job = current;
     current.permissionPending = Boolean(providerPermission(current.schema.schemaId));
     const allowed = await permissionReady(current);
@@ -173,7 +236,7 @@ async function start(message, owner, epoch) {
     check(job === current && !terminal(current.phase), 'CANCELLED');
     await ensureOffscreen();
     check(job === current && !terminal(current.phase), 'CANCELLED');
-    const result = await offscreen({type: 'start', runId: current.runId, attempt: message.attempt, recipient, deadline: current.deadline, verifierOrigin: assignment.origin, tee: Boolean(config.tee)});
+    const result = await offscreen({type: 'start', runId: current.runId, attempt: message.attempt, recipient, deadline: current.deadline, verifierOrigin: assignment.origin, tee: Boolean(config.tee), ...(config.tee ? {upfrontConsent: UPFRONT_CONSENT_VERSION, replay} : {})});
     check(result?.ok, 'WORKER_UNAVAILABLE');
     return {ok: true, ...publicState(current)};
   } catch (error) {
@@ -181,7 +244,7 @@ async function start(message, owner, epoch) {
     throw error;
   } finally { starting = false; }
 }
-const errors = new Set(['EXTENSION_UPDATE_REQUIRED', 'CAPTURE_NAVIGATED', 'CAPTURE_PERMISSION_LOST', 'INVALID_REQUEST', 'INVALID_RECIPIENT', 'ATTEMPT_MISMATCH', 'INVALID_TICKET', 'TICKET_EXPIRED', 'SCHEMA_UNAVAILABLE', 'BUSY', 'STALE_RUN', 'STALE_DOCUMENT', 'CANCELLED', 'VERIFIER_UNAVAILABLE', 'VERIFIER_UNREACHABLE', 'VERIFIER_ORIGIN_REFUSED', 'VERIFIER_VERSION_MISMATCH', 'WORKER_UNAVAILABLE', 'RECIPIENT_CHANGED', 'CAPTURE_BUSY', 'OPEN_ONE_PROVIDER_TAB', 'CAPTURE_UNAVAILABLE', 'CAPTURE_TIMEOUT', 'CAPTURE_OWNER_CHANGED', 'CAPTURE_CANCELLED', 'CAPTURE_TAB_CLOSED', 'PROVIDER_OPEN_FAILED', 'PROVIDER_SIGN_IN_REQUIRED', 'PANEL_GESTURE_REQUIRED', 'RECEIPT_PENDING', 'OWNER_LEFT', 'PERMISSION_REVOKED', 'PROVIDER_PERMISSION_DENIED']);
+const errors = new Set(['CONSENT_REQUIRED', 'PREPARATION_EXPIRED', 'PROVIDER_HTTP_401', 'PROVIDER_HTTP_403', 'PROVIDER_HTTP_429', 'SESSION_POLICY_UNSUPPORTED', 'SESSION_POLICY_INVALID', 'PROOF_TIMEOUT', 'EXTENSION_UPDATE_REQUIRED', 'CAPTURE_NAVIGATED', 'CAPTURE_PERMISSION_LOST', 'INVALID_REQUEST', 'INVALID_RECIPIENT', 'ATTEMPT_MISMATCH', 'INVALID_TICKET', 'TICKET_EXPIRED', 'SCHEMA_UNAVAILABLE', 'BUSY', 'STALE_RUN', 'STALE_DOCUMENT', 'CANCELLED', 'VERIFIER_UNAVAILABLE', 'VERIFIER_UNREACHABLE', 'VERIFIER_ORIGIN_REFUSED', 'VERIFIER_VERSION_MISMATCH', 'WORKER_UNAVAILABLE', 'RECIPIENT_CHANGED', 'CAPTURE_BUSY', 'OPEN_ONE_PROVIDER_TAB', 'CAPTURE_UNAVAILABLE', 'CAPTURE_TIMEOUT', 'CAPTURE_OWNER_CHANGED', 'CAPTURE_CANCELLED', 'CAPTURE_TAB_CLOSED', 'PROVIDER_OPEN_FAILED', 'PROVIDER_SIGN_IN_REQUIRED', 'PANEL_GESTURE_REQUIRED', 'RECEIPT_PENDING', 'OWNER_LEFT', 'PERMISSION_REVOKED', 'PROVIDER_PERMISSION_DENIED', 'CLAUDE_ORG_UNAVAILABLE']);
 function safeCode(error) { return errors.has(error?.message) ? error.message : 'EXTENSION_UNAVAILABLE'; }
 
 chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
@@ -190,8 +253,8 @@ chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
     owner = ownerOf(sender, config.origins);
     check(message?.protocol === PROTOCOL && JSON.stringify(message).length < 16384);
     const simple = ['bridge-ping', 'bridge-open-panel', 'bridge-close-panel'].includes(message.type);
-    object(message, simple ? ['protocol', 'type'] : message.type === 'verification-refused' ? ['protocol', 'type', 'recipient', 'schema', 'error', 'retryAt'] : message.type === 'prepare-provider' ? ['protocol', 'type', 'recipient', 'schema'] : message.type === 'verify-provider' ? ['protocol', 'type', 'recipient', 'attempt', ...(Object.hasOwn(message, 'preparationId') ? ['preparationId'] : [])] : message.type === 'receipt-rejected' ? ['protocol', 'type', 'runId', 'recipient', 'error', 'linkedWallet'] : ['protocol', 'type', 'runId', 'recipient']);
-    check(['bridge-ping', 'bridge-open-panel', 'bridge-close-panel', 'verification-refused', 'prepare-provider', 'preparation-status', 'verify-provider', 'verification-status', 'cancel-verification', 'recipient-changed', 'receipt-verified', 'receipt-rejected'].includes(message.type));
+    object(message, simple ? ['protocol', 'type'] : message.type === 'region-preference' ? ['protocol', 'type', 'discovery'] : message.type === 'verification-refused' ? ['protocol', 'type', 'recipient', 'schema', 'error', 'retryAt'] : message.type === 'prepare-provider' ? ['protocol', 'type', 'recipient', 'schema'] : message.type === 'verify-provider' ? ['protocol', 'type', 'recipient', 'attempt', ...(Object.hasOwn(message, 'preparationId') ? ['preparationId'] : []), ...(Object.hasOwn(message, 'executionId') ? ['executionId'] : [])] : message.type === 'receipt-rejected' ? ['protocol', 'type', 'runId', 'recipient', 'error', 'linkedWallet'] : ['protocol', 'type', 'runId', 'recipient']);
+    check(['bridge-ping', 'bridge-open-panel', 'bridge-close-panel', 'verification-refused', 'prepare-provider', 'preparation-status', 'claim-preparation', 'verify-provider', 'verification-status', 'cancel-verification', 'recipient-changed', 'receipt-verified', 'receipt-rejected', ...(preferredRegions ? ['region-preference'] : [])].includes(message.type));
   } catch { return; }
   // Keep this as the first async browser API on the gesture path. Report refusal;
   // the page can ask for a fresh Verify click.
@@ -210,8 +273,10 @@ chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
   (async () => {
     if (message.type === 'bridge-ping') {
       const entries = await registered;
-      return {ok: true, admissionErrorScreen: true, prepareProvider: guided, ownerConnection: true, protocol: PROTOCOL, engine: 'tlsn', mode: 'Proxy', extensionVersion: chrome.runtime.getManifest().version, wasmVersion: config.wasmVersion, verifierOrigin: config.verifierOrigin, verifierRevision: config.verifierRevision, routing: config.routing, application: config.application, chainId: config.chainId, schemas: entries.map(entry => entry.reference), claimable: false, ...(config.tee ? {tee: config.tee.capability} : {})};
+      return {ok: true, admissionErrorScreen: true, prepareProvider: guided, ...(config.tee ? {upfrontConsent: UPFRONT_CONSENT_VERSION} : {}), ownerConnection: true, protocol: PROTOCOL, engine: 'tlsn', mode: 'Proxy', extensionVersion: chrome.runtime.getManifest().version, wasmVersion: config.wasmVersion, verifierOrigin: config.verifierOrigin, verifierRevision: config.verifierRevision, routing: config.routing, application: config.application, chainId: config.chainId, schemas: entries.map(entry => entry.reference), claimable: false, ...(config.tee ? {tee: config.tee.capability, sessionPolicySupport: SESSION_POLICY_SUPPORT} : {}), ...(preferredRegions ? {regionalEntry: 1} : {})};
     }
+    // Credential-free latency only; probes go solely to canonical names in this build's pinned zone.
+    if (message.type === 'region-preference') return {ok: true, regions: await preferredRegions(message.discovery)};
     if (message.type === 'bridge-close-panel') {
       await ready;
       const intent = panelIntents.get(owner.documentId);
@@ -230,10 +295,13 @@ chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
       const entry = entryOf(await registered, message.schema), recipient = recipientOf(message.recipient);
       check(await owners.live(owner), 'OWNER_LEFT');
       check(!starting && (!job || terminal(job.phase)) && navigation.get(owner.tabId) === epoch, 'STALE_RUN');
-      const preparation = job = {runId: crypto.randomUUID(), owner, recipient, schema: entry.reference, phase: 'awaiting-capture',
-        preparing: true, startedAt: Date.now(), deadline: intent.expiresAt, automaticCapture: true};
-      await permissionReady(preparation); check(job === preparation, 'STALE_RUN'); await persist();
-      check(job === preparation, 'STALE_RUN'); return {ok: true, ...publicState(preparation)};
+      const preparing = job = {runId: crypto.randomUUID(), owner, recipient, schema: entry.reference, phase: 'awaiting-capture',
+        preparing: true, startedAt: Date.now(), deadline: intent.expiresAt, captureExpiresAt: intent.expiresAt, automaticCapture: true,
+        upfrontConsent: Boolean(config.tee)};
+      if (config.tee) preparation = new Preparation(preparing);
+      await permissionReady(preparing); check(job === preparing, 'STALE_RUN'); await persist();
+      advance(preparing);
+      check(job === preparing, 'STALE_RUN'); return {ok: true, ...publicState(preparing)};
     }
     if (message.type === 'verification-refused') {
       await ready;
@@ -244,7 +312,8 @@ chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
       check(admissionErrors.has(message.error), 'INVALID_REQUEST');
       check(!starting && (!job || terminal(job.phase) || job.preparing && owns(job.owner, owner)), 'BUSY');
       check(navigation.get(owner.tabId) === epoch && panelIntents.get(owner.documentId) === intent, 'STALE_DOCUMENT');
-      // No ticket, worker, capture or provider tab exists for a refused admission.
+      preparation?.cancel(); preparation = undefined; capture.cancel();
+      // No proof worker exists for a refused admission; discard local preparation.
       panelIntents.delete(owner.documentId);
       job = {runId: crypto.randomUUID(), owner, recipient, schema: entry.reference, phase: 'failed', error: message.error,
         retryAt: message.error === 'RATE_LIMITED' ? retryTime(message.retryAt) : null, startedAt: Date.now()};
@@ -260,6 +329,13 @@ chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
       return {ok: true, ...publicState(owned)};
     }
     if (recipientOf(message.recipient) !== job.recipient) { await cancel('cancelled', 'RECIPIENT_CHANGED', {spareRevealed: true}); throw Error('RECIPIENT_CHANGED'); }
+    if (message.type === 'claim-preparation') {
+      check(config.tee && owned.preparing && owned.phase === 'ready' && preparation, 'CONSENT_REQUIRED');
+      check(await permissionReady(owned) && await owners.live(owner), 'OWNER_LEFT');
+      await capture.validate(owned);
+      check(job === owned && navigation.get(owner.tabId) === epoch && !terminal(owned.phase), 'STALE_RUN');
+      return {ok: true, executionId: preparation.claim(owned)};
+    }
     if (message.type === 'preparation-status') {
       check(owned.preparing, 'STALE_RUN'); await reconcile(); check(job === owned, 'STALE_RUN');
       return {ok: true, ...publicState(owned)};
@@ -300,6 +376,16 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   if (!panel && !worker) return;
   (async () => {
     await ready;
+    if(worker&&message.type==='replay-metadata'){
+      if(!(storeReplayMetadata&&job&&message.record?.runId===job.runId
+        &&message.record?.attemptId===job.attemptId))return {ok:false,error:'REPLAY_METADATA_JOB_REFUSED'};
+      try{
+        const result=await storeReplayMetadata(message.record);
+        try{await scheduleMetadataRetry(result);}catch{throw Error('REPLAY_METADATA_RETRY_FAILED');}
+        void storeReplayMetadata.flush().then(scheduleMetadataRetry).catch(()=>{});
+        return {ok:true};
+      }catch(error){return {ok:false,error:metadataPersistenceFailureCode(error?.message)??'REPLAY_METADATA_PERSIST_FAILED'};}
+    }
     if (worker && message.type === 'worker-state') {
       if (job && message.state?.runId === job.runId) {
         if (!terminal(job.phase)) { updatePhase(message.state.phase, message.state.error); if (terminal(job.phase)) { capture.cancel(); await closeOffscreen(); } await persist(); advance(job); }
@@ -321,7 +407,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       const preview = await reconcile(true);
       check(job === owned, 'STALE_RUN');
       if (owned.panelDismissed) return {ok: true, state: null};
-      return {ok: true, state: {...publicState(owned), origin: owned.owner.origin, deadline: owned.deadline, startedAt: owned.startedAt, phaseStartedAt: owned.phaseStartedAt, receiptVerified: owned.receiptVerified === true, receiptVerifiedAt: owned.receiptVerifiedAt, receiptRejected: owned.receiptRejected === true, linkedWallet: owned.linkedWallet, receiptWaitStopped: owned.receiptWaitStopped === true, automaticCapture: owned.automaticCapture === true, providerStarted: Number.isInteger(owned.ownedProviderTabId), providerOpening: owned.providerOpening === true, captureActive: Boolean(capture.active(owned.runId)), ...(preview ? {preview} : {})}};
+      return {ok: true, state: {...publicState(owned), origin: owned.owner.origin, deadline: owned.deadline, startedAt: owned.startedAt, ...(owned.sessionBudgetMs ? {sessionBudgetMs: owned.sessionBudgetMs} : {}), phaseStartedAt: owned.phaseStartedAt, receiptVerified: owned.receiptVerified === true, receiptVerifiedAt: owned.receiptVerifiedAt, receiptRejected: owned.receiptRejected === true, linkedWallet: owned.linkedWallet, upfrontConsent: owned.upfrontConsent === true, receiptWaitStopped: owned.receiptWaitStopped === true, automaticCapture: owned.automaticCapture === true, providerStarted: Number.isInteger(owned.ownedProviderTabId), providerOpening: owned.providerOpening === true, captureActive: Boolean(capture.active(owned.runId)), ...(preview ? {preview} : {})}};
     }
     check(message.runId === job.runId && UUID.test(message.runId), 'STALE_RUN');
     check(!owned.panelDismissed, 'STALE_RUN');
@@ -341,7 +427,16 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       // Manual diagnostics also capture in a fresh run-owned tab.
       const entry = entryOf(await registered, owned.schema);
       await capture.start(owned, entry.schema, {});
+    } else if (message.type === 'panel-consent') {
+      check(config.tee && owned.preparing && owned.phase === 'awaiting-consent' && preparation, 'CONSENT_REQUIRED');
+      check(await permissionReady(owned) && await owners.live(owned.owner), 'OWNER_LEFT');
+      await capture.validate(owned);
+      await flow.focusOwnerForAdmission(owned);
+      await capture.validate(owned);
+      check(job === owned && owned.phase === 'awaiting-consent', 'STALE_RUN');
+      preparation.approve(owned); updatePhase('ready'); await persist();
     } else if (message.type === 'panel-approve') {
+      check(!config.tee, 'CONSENT_REQUIRED');
       check(job.phase === 'awaiting-disclosure', 'STALE_RUN');
       check(await permissionReady(owned), 'PERMISSION_REVOKED');
       check(job === owned && owned.phase === 'awaiting-disclosure', 'STALE_RUN');
@@ -350,7 +445,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       const result = await offscreen({type: 'approve', runId: owned.runId}); check(result?.ok, 'WORKER_UNAVAILABLE');
     } else if (message.type === 'panel-continue') await flow.continue(owned);
     else if (message.type === 'panel-recover') await flow.recover(owned);
-    else if (message.type === 'panel-cancel') await cancel();
+    else if (message.type === 'panel-cancel') await cancelFromPanel();
     else throw Error('INVALID_REQUEST');
     return {ok: true};
   })().then(reply, error => reply({ok: false, error: safeCode(error)}));
@@ -365,6 +460,10 @@ chrome.tabs.onRemoved.addListener(tabId => ownerGone(tabId));
 chrome.tabs.onUpdated.addListener((tabId, change) => { if (change.status === 'loading' || change.url) ownerGone(tabId, false); });
 chrome.tabs.onDetached.addListener(tabId => ownerGone(tabId));
 chrome.permissions.onRemoved.addListener(() => { void ready.then(() => cancel('failed', 'PERMISSION_REVOKED')).catch(() => {}); });
-chrome.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'tlsn-lifecycle') void ready.then(() => reconcile()).catch(() => {}); });
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === 'tlsn-lifecycle') void ready.then(() => reconcile()).catch(() => {});
+  if(alarm.name===metadataRetry&&storeReplayMetadata)void storeReplayMetadata.flush().then(scheduleMetadataRetry).catch(()=>{});
+});
+if(storeReplayMetadata)void storeReplayMetadata.flush().then(scheduleMetadataRetry).catch(()=>{});
 void chrome.alarms.create('tlsn-lifecycle', {periodInMinutes: 1});
 void chrome.sidePanel.setPanelBehavior({openPanelOnActionClick: true});

@@ -50,8 +50,34 @@ const HANDLER_TYPES: Readonly<Record<string, string>> = Object.freeze(Object.ass
 }));
 // Each selector is written for one provider's response shape; it is never reusable elsewhere.
 const SELECTOR_ORIGINS: Readonly<Record<string, string>> = Object.freeze(Object.assign(Object.create(null), {
-  "claude-paid-personal-org-v1": "https://claude.ai", "grok-paid-subscription-v1": "https://grok.com",
+  "claude-paid-personal-org-v1": "https://claude.ai", "claude-paid-personal-org-single-v1": "https://claude.ai",
+  "grok-paid-subscription-v1": "https://grok.com",
 }));
+// Only a selector that reads a bounded list can be given an item cap.
+const SELECTOR_MAX_ITEMS: Readonly<Record<string, number>> = Object.freeze(Object.assign(Object.create(null), {
+  "grok-paid-subscription-v1": 64,
+}));
+
+// Declared request path parameters. Each kind is a fixed-length, anchored pattern, so a
+// concrete target splits into literal text and parameter values with no ambiguity.
+const PATH_PARAM_NAME = /^[a-z][a-z0-9_]{0,31}$/;
+const PARAM_KINDS: Readonly<Record<string, Readonly<{ pattern: RegExp; length: number; specimen: string }>>> =
+  Object.freeze(Object.assign(Object.create(null), {
+    "lowercase-uuid-v1": Object.freeze({
+      pattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/, length: 36,
+      specimen: "00000000-0000-4000-8000-000000000000",
+    }),
+  }));
+// The framing values a private-headers response keeps public. Every other header value
+// is one complete hidden range, so this list is the whole public-header budget.
+export const VISIBLE_RESPONSE_HEADERS: readonly string[] =
+  Object.freeze(["content-type", "content-length", "transfer-encoding", "content-encoding"]);
+// Request exactly gzip or exactly identity; never br or zstd (claude.ai's brotli is
+// larger than its gzip). `["gzip"]` alone is the one-constant tightening.
+const ENCODING_SETS: readonly (readonly string[])[] =
+  Object.freeze([Object.freeze(["gzip", "identity"]), Object.freeze(["identity"]), Object.freeze(["gzip"])]);
+const PRIVACY_LIMITS: readonly string[] =
+  Object.freeze(["maxDecodedBodyBytes", "maxChunks", "maxRevealedRecvBytes", "maxRevealedSentBytes"]);
 
 export function parseSchema(input: unknown): VerificationSchema {
   // Copy data, reject unsupported values/accessors, and detach it from caller mutation.
@@ -66,11 +92,36 @@ export function parseSchema(input: unknown): VerificationSchema {
   integer(value.version);
   string(value.providerId, /^[A-Z][A-Z0-9-]{0,95}$/);
   requireThat(["fixture", "candidate", "qualified"].includes(String(value.lifecycle)), "INVALID_SCHEMA");
-  const request = object(value.request, ["origin", "method", "path", "query", "body"]);
+  const hasPathParams = Object.hasOwn(Object(value.request), "pathParams");
+  const request = object(value.request, ["origin", "method", "path", "query", "body", ...(hasPathParams ? ["pathParams"] : [])]);
   const origin = httpsOrigin(request.origin);
   requireThat(request.method === "GET" || request.method === "POST", "INVALID_SCHEMA");
   string(request.path, /^\/[\x21-\x7e]*$/);
-  requireThat(!/[?#]/.test(request.path) && new URL(request.origin + request.path).pathname === request.path, "INVALID_SCHEMA");
+  requireThat(!/[?#]/.test(request.path), "INVALID_SCHEMA");
+  // Without declared parameters the path is one literal, which must survive a URL
+  // pathname round trip; `{` would not, which is why a template declares itself.
+  if (!hasPathParams) requireThat(!/[{}]/.test(request.path) && new URL(request.origin + request.path).pathname === request.path, "INVALID_SCHEMA");
+  else {
+    const params = object(request.pathParams);
+    const names = Object.keys(params);
+    requireThat(names.length >= 1 && names.length <= 4, "INVALID_SCHEMA");
+    let instantiated: string = request.path;
+    for (const [name, entry] of Object.entries(params)) {
+      string(name, PATH_PARAM_NAME);
+      const spec = object(entry, ["kind", "bindsTo"]);
+      const kind = PARAM_KINDS[String(spec.kind)];
+      requireThat(kind !== undefined, "INVALID_SCHEMA");
+      // The proven value must equal a field of the SELECTED response document. A
+      // pointer can only name response JSON, never a prover-controlled cookie such
+      // as claude.ai's `lastActiveOrg`, which is a hint and never an authority.
+      string(spec.bindsTo); pointerTokens(spec.bindsTo);
+      requireThat(spec.bindsTo !== "", "INVALID_SCHEMA");
+      const placeholder = `{${name}}`;
+      requireThat(request.path.split(placeholder).length === 2, "INVALID_SCHEMA");
+      instantiated = instantiated.split(placeholder).join(kind!.specimen);
+    }
+    requireThat(!/[{}]/.test(instantiated) && new URL(request.origin + instantiated).pathname === instantiated, "INVALID_SCHEMA");
+  }
   const query = object(request.query);
   for (const [key, entry] of Object.entries(query)) { string(key); requireThat(typeof entry === "string", "INVALID_SCHEMA"); }
   const body = object(request.body);
@@ -109,20 +160,53 @@ export function parseSchema(input: unknown): VerificationSchema {
     requireThat(!/^(?:host|connection|content-length|transfer-encoding|accept-encoding|authorization|cookie|proxy-.*)$/.test(name), "INVALID_SCHEMA");
     string(entry, /^[\x20-\x7e]+$/);
   }
-  const limits = object(value.limits, ["maxSentBytes", "maxRecvBytes", "maxHeaderBytes", "maxBodyBytes", "maxJsonDepth", "sessionTimeoutMs", "maxRecvRecords", "concurrency"]);
+  // The four privacy limits exist only together with `response.privacy`, so no schema
+  // can be half-configured and every schema pinned before them keeps its exact digest.
+  const hasPrivacy = Object.hasOwn(Object(value.response), "privacy");
+  const privacyLimits = PRIVACY_LIMITS.filter(key => Object.hasOwn(Object(value.limits), key));
+  requireThat(privacyLimits.length === (hasPrivacy ? PRIVACY_LIMITS.length : 0), "INVALID_SCHEMA");
+  const limits = object(value.limits, ["maxSentBytes", "maxRecvBytes", "maxHeaderBytes", "maxBodyBytes", "maxJsonDepth", "sessionTimeoutMs", "maxRecvRecords", "concurrency", ...privacyLimits]);
   for (const entry of Object.values(limits)) integer(entry);
   requireThat(Number(limits.maxJsonDepth) <= 64 && Number(limits.sessionTimeoutMs) <= 120_000 && Number(limits.concurrency) <= 16, "INVALID_SCHEMA");
   requireThat(Number(limits.maxHeaderBytes) <= Number(limits.maxSentBytes) && Number(limits.maxHeaderBytes) <= Number(limits.maxRecvBytes) && Number(limits.maxBodyBytes) <= Number(limits.maxRecvBytes), "INVALID_SCHEMA");
-  const response = object(value.response, ["status", "contentType", "disclosure", ...(Object.hasOwn(Object(value.response), "secretHeaders") ? ["secretHeaders"] : [])]);
+  if (hasPrivacy) {
+    // maxBodyBytes keeps its meaning: the de-chunked wire body, i.e. the encoded one.
+    requireThat(Number(limits.maxDecodedBodyBytes) >= Number(limits.maxBodyBytes) && Number(limits.maxDecodedBodyBytes) <= 65_536, "INVALID_SCHEMA");
+    requireThat(Number(limits.maxChunks) <= 4096, "INVALID_SCHEMA");
+    requireThat(Number(limits.maxRevealedRecvBytes) <= Number(limits.maxRecvBytes), "INVALID_SCHEMA");
+    requireThat(Number(limits.maxRevealedSentBytes) <= Number(limits.maxSentBytes), "INVALID_SCHEMA");
+  }
+  const response = object(value.response, ["status", "contentType", "disclosure",
+    ...(Object.hasOwn(Object(value.response), "secretHeaders") ? ["secretHeaders"] : []), ...(hasPrivacy ? ["privacy"] : [])]);
   requireThat(response.status === 200 && response.contentType === "application/json" && response.disclosure === "full-json-body", "INVALID_SCHEMA");
   if (Object.hasOwn(response, "secretHeaders")) {
     const secretHeaders = uniqueStrings(response.secretHeaders);
     requireThat(request.origin === "https://chatgpt.com" && secretHeaders.length === 1
       && secretHeaders[0] === "x-oai-is-update", "INVALID_SCHEMA");
   }
+  if (hasPrivacy) {
+    // Hiding is not a judgement about which header is sensitive: everything except
+    // the framing is hidden, so `secretHeaders` has nothing left to name.
+    requireThat(!Object.hasOwn(response, "secretHeaders"), "INVALID_SCHEMA");
+    const privacy = object(response.privacy, ["mode", "visibleHeaders", "encodings"]);
+    requireThat(privacy.mode === "private-headers-v1", "INVALID_SCHEMA");
+    const visible = uniqueStrings(privacy.visibleHeaders, /^[a-z][a-z0-9-]*$/);
+    requireThat(visible.length === VISIBLE_RESPONSE_HEADERS.length
+      && visible.every((name, index) => name === VISIBLE_RESPONSE_HEADERS[index]), "INVALID_SCHEMA");
+    const encodings = uniqueStrings(privacy.encodings, /^[a-z]+$/);
+    requireThat(ENCODING_SETS.some(set => set.length === encodings.length && set.every((name, index) => name === encodings[index])), "INVALID_SCHEMA");
+  }
   if (optional.length) {
-    const selector = object(value.selector, ["kind"]);
+    // `maxItems` is optional for the same reason the selector itself is.
+    const hasMaxItems = Object.hasOwn(Object(value.selector), "maxItems");
+    const selector = object(value.selector, ["kind", ...(hasMaxItems ? ["maxItems"] : [])]);
     requireThat(SELECTOR_ORIGINS[String(selector.kind)] !== undefined && SELECTOR_ORIGINS[String(selector.kind)] === request.origin, "INVALID_SCHEMA");
+    if (hasMaxItems) {
+      const ceiling = SELECTOR_MAX_ITEMS[String(selector.kind)];
+      requireThat(ceiling !== undefined, "INVALID_SCHEMA");
+      integer(selector.maxItems);
+      requireThat(Number(selector.maxItems) <= ceiling!, "INVALID_SCHEMA");
+    }
   }
   const fields = new Map<string, ObjectValue>();
   for (const entry of list(value.fields)) {
@@ -171,11 +255,82 @@ export function parseSchema(input: unknown): VerificationSchema {
   return freeze(value) as VerificationSchema;
 }
 
-export function requestTarget(schema: VerificationSchema): string {
+function querySuffix(schema: VerificationSchema): string {
   const query = new URLSearchParams(Object.entries(schema.request.query).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)).toString();
-  return schema.request.path + (query ? `?${query}` : "");
+  return query ? `?${query}` : "";
 }
-export function requestUrl(schema: VerificationSchema): string { return schema.request.origin + requestTarget(schema); }
+
+/** Instantiate the declared path template. A schema without one ignores no value: a
+ *  parameter offered to a schema that declares none is a mismatch, not a courtesy. */
+export function instantiatePath(schema: VerificationSchema, pathParams?: Readonly<Record<string, string>>): string {
+  const declared = schema.request.pathParams;
+  if (!declared) {
+    requireThat(pathParams === undefined || Object.keys(pathParams).length === 0, "PATH_PARAM_MISMATCH");
+    return schema.request.path;
+  }
+  const given = pathParams ?? {};
+  const names = Object.keys(declared);
+  requireThat(Object.keys(given).length === names.length, "PATH_PARAM_MISMATCH");
+  let path = schema.request.path;
+  for (const name of names) {
+    const value = given[name];
+    requireThat(typeof value === "string" && PARAM_KINDS[declared[name]!.kind]!.pattern.test(value), "PATH_PARAM_MISMATCH");
+    path = path.split(`{${name}}`).join(value);
+  }
+  return path;
+}
+
+/** The exact inverse: read the parameter values back out of a concrete request target.
+ *  Both request paths (full and redacted) use this one matcher, so they cannot differ. */
+export function matchRequestTarget(schema: VerificationSchema, target: string): Readonly<Record<string, string>> {
+  requireThat(typeof target === "string" && target.length > 0 && target.length <= 2048, "SCOPE_MISMATCH");
+  const suffix = querySuffix(schema);
+  const declared = schema.request.pathParams;
+  if (!declared) {
+    requireThat(target === schema.request.path + suffix, "SCOPE_MISMATCH");
+    return Object.freeze(Object.create(null) as Record<string, string>);
+  }
+  requireThat(target.endsWith(suffix) && target.length > suffix.length, "SCOPE_MISMATCH");
+  const path = suffix ? target.slice(0, -suffix.length) : target;
+  const template = schema.request.path;
+  const values: Record<string, string> = Object.create(null);
+  let cursor = 0, index = 0;
+  while (index < template.length) {
+    if (template[index] === "{") {
+      const close = template.indexOf("}", index);
+      requireThat(close > index, "INVALID_SCHEMA");
+      const name = template.slice(index + 1, close);
+      const kind = PARAM_KINDS[declared[name]?.kind ?? ""];
+      requireThat(kind !== undefined, "INVALID_SCHEMA");
+      // Every kind is fixed-length, so the value's extent never depends on a search
+      // through attacker-chosen text.
+      const value = path.slice(cursor, cursor + kind!.length);
+      requireThat(kind!.pattern.test(value), "PATH_PARAM_MISMATCH");
+      values[name] = value;
+      cursor += kind!.length;
+      index = close + 1;
+    } else {
+      requireThat(path[cursor] === template[index], "SCOPE_MISMATCH");
+      cursor++; index++;
+    }
+  }
+  requireThat(cursor === path.length, "SCOPE_MISMATCH");
+  requireThat(Object.keys(values).length === Object.keys(declared).length, "PATH_PARAM_MISMATCH");
+  return Object.freeze(values);
+}
+
+/** The request's content coding, derived from the response privacy block: one source
+ *  of truth for the capture, the replay and the two request validators. */
+export function acceptEncoding(schema: VerificationSchema): "gzip" | "identity" {
+  return schema.response.privacy?.encodings.includes("gzip") ? "gzip" : "identity";
+}
+
+export function requestTarget(schema: VerificationSchema, pathParams?: Readonly<Record<string, string>>): string {
+  return instantiatePath(schema, pathParams) + querySuffix(schema);
+}
+export function requestUrl(schema: VerificationSchema, pathParams?: Readonly<Record<string, string>>): string {
+  return schema.request.origin + requestTarget(schema, pathParams);
+}
 export function requestBody(schema: VerificationSchema): string {
   return schema.request.body.kind === "empty" ? "" : canonicalJson(schema.request.body.value);
 }

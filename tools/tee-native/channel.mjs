@@ -3,12 +3,12 @@
 import {Aes128Gcm, CipherSuite, DhkemP256HkdfSha256, HkdfSha256} from '@hpke/core';
 import {check, hex, unhex, lp} from './wire.mjs';
 
-export const SUITE = 'HPKE-Auth-P256-HKDFSHA256-AES128GCM/pines-stream-v1';
+export const SUITE = 'HPKE-Auth-P256-HKDFSHA256-AES128GCM/pines-stream-v2';
 export const suite = new CipherSuite({kem: new DhkemP256HkdfSha256(), kdf: new HkdfSha256(), aead: new Aes128Gcm()});
 export const channelKey = () => suite.kem.generateKeyPair();
 export const exportChannelKey = async key => hex(await suite.kem.serializePublicKey(key));
 export const importChannelKey = key => suite.kem.deserializePublicKey(unhex(key, 65));
-export const FRAME = Object.freeze({CONFIRM: 1, DATA: 2, FINISH: 3, RESULT: 4, CANCEL: 5, ACK: 6});
+export const FRAME = Object.freeze({CONFIRM: 1, DATA: 2, FINISH: 3, RESULT: 4, CANCEL: 5, ACK: 6, CREDIT: 7});
 export const MAX_FRAME = 64 * 1024;
 const MAX_TOTAL = 64 * 1024 * 1024;
 
@@ -55,6 +55,14 @@ class Frames {
       if (type === FRAME.FINISH || type === FRAME.CANCEL) this.#closed = true;
       return {type, bytes};
     });
+  }
+  async accountConfirmation(bytes){
+    check(this.#context&&bytes instanceof Uint8Array&&bytes.length<=4096,'CHANNEL_CLOSED');
+    const exported=new Uint8Array(await this.#context.export(lp(['pines/account-confirmation/v2',this.#binding]),32));
+    try {
+      const key=await crypto.subtle.importKey('raw',exported,{name:'HMAC',hash:'SHA-256'},false,['sign']);
+      return hex(await crypto.subtle.sign('HMAC',key,bytes));
+    }finally{exported.fill(0);}
   }
   destroy() {this.#closed = true; this.#context = undefined;}
 }

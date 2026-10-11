@@ -62,6 +62,28 @@ export class ProviderFlow {
     check(this.#current() === job && job.phase === 'completed' && job.receiptVerified === true, 'RECEIPT_PENDING');
     await this.#return(job);
   }
+  async focusOwnerForAdmission(job) {
+    const current = () => check(this.#current() === job && job.preparing && job.phase === 'awaiting-consent', 'STALE_RUN');
+    return this.#focusOwner(job, current);
+  }
+  async focusOwnerForCancellation(job, signal) {
+    const current = () => check(!signal.aborted && this.#current() === job && !terminal(job.phase), 'STALE_RUN');
+    return this.#focusOwner(job, current);
+  }
+  async #focusOwner(job, current) {
+    current();
+    const owner = await this.#browser.tabs.get(job.owner.tabId).catch(() => null);
+    check(owner?.windowId === job.owner.windowId && await this.#ownerReady(job.owner), 'OWNER_LEFT');
+    current();
+    // Some wallet providers refuse account/chain reads in a hidden document.
+    // Return to this exact live owner before the page rechecks its wallet for
+    // admission or cancellation. The captured provider tab stays open and owned.
+    await this.#browser.tabs.update(job.owner.tabId, {active: true});
+    current();
+    await this.#browser.windows.update(job.owner.windowId, {focused: true});
+    check(await this.#ownerReady(job.owner), 'OWNER_LEFT');
+    current();
+  }
   async recover(job) {
     // A stopped run (cancelled, or failed, a rejected receipt among them) has nothing left to wait for: back to Pines
     // at once. A finished one waits for the receipt, or for the wait to run out.

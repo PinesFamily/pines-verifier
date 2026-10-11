@@ -4,6 +4,13 @@ export function sameTeeCapability(a: unknown, b: unknown): boolean;
 export function teeProviderFor(capability: TeeCapability | undefined, reference: SchemaReference, saved?: boolean): TeeProvider | undefined;
 export type SchemaReference = {schemaId: string; version: number; digest: string};
 export type AttemptRouting = 'pinned' | 'assigned';
+export type SessionPolicy = {sessionPolicyVersion: 1; sessionPolicyRevision: number; sessionBudgetMs: number};
+export type SessionPolicySnapshot = SessionPolicy & {issuedAt: number; sessionExpiresAt: number};
+export type SessionPolicySupport = {sessionPolicyVersion: 1; minSessionBudgetMs: number; maxSessionBudgetMs: number};
+export function supportedSessionPolicy(value: unknown): SessionPolicy;
+/** Advisory regional entry discovery; never a destination authority. */
+export type TeeRegionalEntry = {version: 1; protocol: 'pines-tee-regional-entry-v1'; suffix: string; regions: readonly {region: string; probes: readonly string[]}[]};
+export function parseEntryDiscovery(value: unknown, suffix?: string): TeeRegionalEntry;
 export type TlsnConfiguration = {
   protocol: 'pines-verification-config-v1'; engine: 'tlsn'; enabled: true;
   application: string; chainId: number; mode: 'Proxy'; claimable: boolean;
@@ -12,11 +19,14 @@ export type TlsnConfiguration = {
   /** Present on APIs that assign a verifier per attempt. */
   attemptRouting?: AttemptRouting[];
   tee?: TeeCapability;
+  sessionPolicy?: SessionPolicy;
+  /** Present only when the API advertises regional direct entry. */
+  teeRegionalEntry?: TeeRegionalEntry;
 };
 export type VerifierAssignment = {instanceId: string; origin: string; revision: string};
 export type ReceiptHandle = {
   recipient: string; runId?: string;
-  attempt: {attemptId: string; schema: SchemaReference; resultExpiresAt: number; routing?: AttemptRouting; verifier?: VerifierAssignment};
+  attempt: {attemptId: string; schema: SchemaReference; resultExpiresAt: number; routing?: AttemptRouting; verifier?: VerifierAssignment} & Partial<SessionPolicySnapshot>;
 };
 export type ReceiptStatus = {
   attemptId: string; recipient: string; schema: SchemaReference; engine: 'tlsn'; mode: 'Proxy';
@@ -43,8 +53,8 @@ export function createTlsnClient(options: {
 }): {
   openPanel(): Promise<{ok: true; opened: true}>;
   closePanel?(): Promise<{ok: true; closed: true}>;
-  capabilities(): Promise<{engine: 'tlsn'; mode: 'Proxy'; application: string; chainId: number; verifierRevision: string; verifierOrigin: string; schemas: SchemaReference[]; claimable: false; routingMode?: AttemptRouting; routing?: AttemptRouting[]; admissionErrorScreen?: boolean; prepareProvider?: boolean; ownerConnection?: boolean; tee?: TeeCapability}>;
-  start(recipient: string, schemaId?: string, options?: {signal?: AbortSignal; onAttempt?: (handle: ReceiptHandle) => void}): Promise<ReceiptHandle>;
+  capabilities(): Promise<{engine: 'tlsn'; mode: 'Proxy'; application: string; chainId: number; verifierRevision: string; verifierOrigin: string; schemas: SchemaReference[]; claimable: false; routingMode?: AttemptRouting; routing?: AttemptRouting[]; admissionErrorScreen?: boolean; prepareProvider?: boolean; upfrontConsent?: 2; ownerConnection?: boolean; tee?: TeeCapability; sessionPolicySupport?: SessionPolicySupport; regionalEntry?: 1}>;
+  start(recipient: string, schemaId?: string, options?: {signal?: AbortSignal; onAttempt?: (handle: ReceiptHandle) => void; isCurrent?: () => boolean; onPreparation?: (state: {phase: string}) => void}): Promise<ReceiptHandle>;
   extensionStatus(handle: ReceiptHandle): Promise<ExtensionState | null>;
   receiptStatus(handle: ReceiptHandle): Promise<ReceiptStatus>;
   cancel(handle: ReceiptHandle): Promise<void>;

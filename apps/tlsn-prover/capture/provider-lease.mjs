@@ -5,13 +5,15 @@ const route = value => {try {const u = new URL(value); return u.origin + u.pathn
 
 // One browser-created navigation, one document, one replay. No script injection or navigation permission.
 // Register ONLY after the host grant: Chrome can leave an earlier webRequest registration inactive.
-export async function providerLease({browser, schema, owner, url, deadline, navigate, onChange, onOwner}) {
+export async function providerLease({browser, schema, owner, url, deadline, navigate, onChange, onOwner, requireResponse = false}) {
   check(await browser.permissions.contains({origins: [schema.request.origin + '/*']}), 'CAPTURE_PERMISSION_LOST');
-  const removers = []; let session, documentId, navigationId, invalid, timer, used = false;
+  const removers = []; let session, documentId, navigationId, invalid, timer, used = false, capturedRequest;
+  let responseResolve;
+  const responseReady = requireResponse ? new Promise(resolve => {responseResolve = resolve;}) : Promise.resolve();
   const add = (event, listener, ...args) => {event.addListener(listener, ...args); removers.push(() => event.removeListener(listener));};
   const clear = () => {clearTimeout(timer); for (const remove of removers.splice(0)) remove();};
   const fail = code => {
-    if (invalid) return; invalid = code; clear();
+    if (invalid) return; invalid = code; clear(); responseResolve?.();
     if (session && ['waiting', 'captured'].includes(session.status().phase)) session.cancel(code);
     else onChange({phase: 'failed', error: code});
   };
@@ -35,18 +37,38 @@ export async function providerLease({browser, schema, owner, url, deadline, navi
     }
   };
   const headers = d => {
-    if (!invalid && navigationId && validRequest(d) && d.documentId === documentId && capturedFrom(schema, d.url)) session?.observe(d);
+    if (!invalid && navigationId && validRequest(d) && d.documentId === documentId && capturedFrom(schema, d.url)) {
+      if (!capturedRequest && session?.observe(d)) capturedRequest = d.requestId;
+    }
   };
   const inspect = async () => {
-    check(!invalid && documentId, invalid ?? 'CAPTURE_UNAVAILABLE');
-    const [tab, granted] = await Promise.all([browser.tabs.get(owner.tabId), browser.permissions.contains({origins: [schema.request.origin + '/*']})]);
-    check(!invalid && granted && tab.windowId === owner.windowId && tab.incognito === false && route(tab.url) === route(url)
-      && (!tab.pendingUrl || route(tab.pendingUrl) === route(url)) && tab.status === 'complete', 'CAPTURE_OWNER_CHANGED');
-    return true;
+    // Same-document history changes can briefly return a previously complete
+    // tab to loading. Keep all ownership guards live while it settles; neither
+    // loading nor a timeout is proof that the original document is still valid.
+    const settleBy = performance.now() + 1000;
+    for (;;) {
+      check(!invalid && documentId, invalid ?? 'CAPTURE_UNAVAILABLE');
+      const [tab, granted] = await Promise.all([browser.tabs.get(owner.tabId), browser.permissions.contains({origins: [schema.request.origin + '/*']})]);
+      check(!invalid && granted && tab.windowId === owner.windowId && tab.incognito === false && route(tab.url) === route(url)
+        && (!tab.pendingUrl || route(tab.pendingUrl) === route(url)), 'CAPTURE_OWNER_CHANGED');
+      if (tab.status === 'complete') return true;
+      check(tab.status === 'loading' && performance.now() < settleBy, 'CAPTURE_OWNER_CHANGED');
+      await new Promise(resolve => setTimeout(resolve, Math.min(50, Math.max(1, settleBy - performance.now()))));
+    }
   };
   try {
     add(browser.webRequest.onBeforeRequest, before, {urls: [schema.request.origin + '/*'], tabId: owner.tabId, types: ['main_frame', 'xmlhttprequest']});
     add(browser.webRequest.onBeforeSendHeaders, headers, {urls: [schema.request.origin + '/*'], tabId: owner.tabId, types: ['xmlhttprequest']}, ['requestHeaders', 'extraHeaders']);
+    if (requireResponse) add(browser.webRequest.onHeadersReceived, d => {
+      if (invalid || d.requestId !== capturedRequest || !validRequest(d) || d.documentId !== documentId) return;
+      // Readiness only. Response values/body never leave this callback or become
+      // evidence, and the admitted TLSN request independently authenticates them.
+      const types = (d.responseHeaders ?? []).filter(header => header.name?.toLowerCase() === 'content-type');
+      if (d.statusCode !== 200 || types.length !== 1 || !/^application\/json(?:\s*;|$)/i.test(types[0].value ?? '')) {
+        fail([401, 403, 429].includes(d.statusCode) ? `PROVIDER_HTTP_${d.statusCode}` : 'PROVIDER_SIGN_IN_REQUIRED'); return;
+      }
+      responseResolve();
+    }, {urls: [schema.request.origin + '/*'], tabId: owner.tabId, types: ['xmlhttprequest']}, ['responseHeaders']);
     add(browser.webRequest.onBeforeRedirect, d => {if (d.tabId === owner.tabId && d.type === 'main_frame') fail('CAPTURE_NAVIGATED');}, {urls: [schema.request.origin + '/*'], tabId: owner.tabId, types: ['main_frame']});
     add(browser.tabs.onUpdated, (id, change, tab) => {
       if (id !== owner.tabId || invalid) return;
@@ -67,10 +89,11 @@ export async function providerLease({browser, schema, owner, url, deadline, navi
     check(!invalid, invalid);
     return {
       status: () => invalid ? {phase: 'failed', error: invalid} : session?.status() ?? {phase: 'waiting'},
-      cancel: () => {invalid ??= 'CAPTURE_CANCELLED'; clear(); session?.cancel();},
+      cancel: () => {invalid ??= 'CAPTURE_CANCELLED'; clear(); responseResolve?.(); session?.cancel();},
       validate: async () => {try {return await inspect();} catch {fail('CAPTURE_OWNER_CHANGED'); throw Error('CAPTURE_OWNER_CHANGED');}},
       take: async runId => {
         check(!used && session?.status().phase === 'captured', 'CAPTURE_UNAVAILABLE');
+        await responseReady; check(!invalid, invalid ?? 'CAPTURE_UNAVAILABLE');
         // Early API requests can precede the page's complete event. Keep the lease until its initial load settles.
         while (!invalid && Date.now() < deadline) {
           const tab = await browser.tabs.get(owner.tabId);

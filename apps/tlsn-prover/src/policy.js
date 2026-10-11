@@ -1,3 +1,5 @@
+import {sessionSnapshot, SESSION_SNAPSHOT_KEYS} from './session-timing.js';
+import {isPrivateHeadersSchema} from './private-headers.mjs';
 export const PROTOCOL = 'pines-tlsn-bridge-v1';
 export const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 export const terminal = phase => ['completed', 'cancelled', 'failed'].includes(phase);
@@ -14,8 +16,10 @@ export function ownerOf(sender, origins) {
 export const PROVIDER_SCHEMAS = Object.freeze(['pines.chatgpt.plan', 'pines.claude.plan', 'pines.grok.plan']);
 // One build carries a list of schemas (one extension ID serves every provider).
 // Each is still resolved from the packaged registry, so its digest stays pinned.
+// Private-headers schemas (ChatGPT 4, Claude 2, Grok 2) exist only for the TEE class: the ordinary worker cannot
+// prove them (the client register records why).
 export function supported(schema, config) {
-  return config.schemas.some(({schemaId, version}) => schema?.schemaId === schemaId && schema.version === version)
+  return !isPrivateHeadersSchema(schema) && config.schemas.some(({schemaId, version}) => schema?.schemaId === schemaId && schema.version === version)
     && (schema.lifecycle === 'fixture' || (config.captureProvider === true && PROVIDER_SCHEMAS.includes(schema.schemaId)));
 }
 export function buildEntries(registry, config) {
@@ -53,7 +57,8 @@ export function assignmentOf(attempt, ticket) {
 export function validateAttempt(attempt, recipient, reference, schema, config, now = Date.now()) {
   // A pinned (pre-assignment) attempt has exactly the seven v1 keys; an assigned one adds `verifier`.
   const assigned = attempt && typeof attempt === 'object' && Object.hasOwn(attempt, 'verifier');
-  object(attempt, ['attemptId', 'ticket', 'schema', 'expiresAt', 'resultExpiresAt', 'claimable', 'verifierOrigin', ...(assigned ? ['verifier'] : [])]);
+  if (config.tee) sessionSnapshot(attempt, now);
+  object(attempt, ['attemptId', 'ticket', 'schema', 'expiresAt', 'resultExpiresAt', 'claimable', 'verifierOrigin', ...(assigned ? ['verifier'] : []), ...(config.tee ? ['issuedAt', ...SESSION_SNAPSHOT_KEYS] : [])]);
   check(UUID.test(attempt.attemptId) && attempt.claimable === false, 'ATTEMPT_MISMATCH');
   check(verifierOriginAllowed(attempt.verifierOrigin, config), 'VERIFIER_ORIGIN_REFUSED');
   object(attempt.schema, ['schemaId', 'version', 'digest']);
@@ -75,9 +80,14 @@ export function validateAttempt(attempt, recipient, reference, schema, config, n
   if (config.tee) check(ticket.verifierRevision === config.tee.capability.revision && config.tee.providers.some(entry => entry.policy?.admissionEnabled
     && ['schemaId', 'version', 'digest'].every(key => reference[key] === entry.reference[key])), 'ATTEMPT_MISMATCH');
   check(Number.isSafeInteger(ticket.issuedAt) && ticket.issuedAt <= now + 5000 && Number.isSafeInteger(ticket.expiresAt) && ticket.expiresAt > now && ticket.expiresAt - ticket.issuedAt <= 60_000 && attempt.expiresAt === ticket.expiresAt && Number.isSafeInteger(ticket.resultExpiresAt) && ticket.resultExpiresAt === attempt.resultExpiresAt && ticket.resultExpiresAt > ticket.expiresAt && ticket.resultExpiresAt - ticket.issuedAt <= 1_800_000, 'TICKET_EXPIRED');
-  check(['maxSentBytes', 'maxRecvBytes', 'maxRecvRecords', 'sessionTimeoutMs'].every(key => ticket[key] === schema.limits[key]), 'ATTEMPT_MISMATCH');
+  if (config.tee) {
+    sessionSnapshot(ticket, now);
+    check(['issuedAt', ...SESSION_SNAPSHOT_KEYS].every(key => attempt[key] === ticket[key]), 'ATTEMPT_MISMATCH');
+    check(ticket.sessionTimeoutMs === ticket.sessionBudgetMs, 'ATTEMPT_MISMATCH');
+  }
+  check(['maxSentBytes', 'maxRecvBytes', 'maxRecvRecords', ...(config.tee ? [] : ['sessionTimeoutMs'])].every(key => ticket[key] === schema.limits[key]), 'ATTEMPT_MISMATCH');
   return ticket;
 }
 export function publicState(job) {
-  return job ? {runId: job.runId, attemptId: job.attemptId, recipient: job.recipient, schema: job.schema, phase: job.permissionPending && job.phase === 'awaiting-capture' ? 'awaiting-permission' : job.phase, error: job.error ?? null, claimable: false, ...(job.preparing ? {preparationReady: !job.permissionPending && !terminal(job.phase)} : {}), ...(job.retryAt != null ? {retryAt: job.retryAt} : {})} : null;
+  return job ? {runId: job.runId, attemptId: job.attemptId, recipient: job.recipient, schema: job.schema, phase: job.permissionPending && job.phase === 'awaiting-capture' ? 'awaiting-permission' : job.phase, error: job.error ?? null, claimable: false, ...(job.upfrontConsent ? {upfrontConsent: true, preparing: Boolean(job.preparing)} : {}), ...(job.preparing ? {preparationReady: job.upfrontConsent ? job.phase === 'ready' : !job.permissionPending && !terminal(job.phase)} : {}), ...(job.retryAt != null ? {retryAt: job.retryAt} : {})} : null;
 }

@@ -1,12 +1,12 @@
 {
   "application": "pines",
   "chain": 4663,
-  "revision": "tee-v1-20261004",
-  "verificationEpoch": "pines-tee-v1-20261004",
-  "protocolVersion": "pines-tee-native-v1",
-  "trustPolicyVersion": 1,
+  "revision": "tee-v2-sydney-20261006",
+  "verificationEpoch": "pines-tee-v2-sydney-20261006",
+  "protocolVersion": "pines-tee-native-v2",
+  "trustPolicyVersion": 2,
   "deploymentHash": "cac8f477c5ec123a0e3fd188890ed54a1e1b57ebffa56c78587e453b9239002c",
-  "protocol": "pines-tee-native-v1",
+  "protocol": "pines-tee-native-v2",
   "capabilityVersion": 2,
   "claimSigningAvailable": false,
   "providers": [
@@ -15,19 +15,14 @@
       "profile": "pines.chatgpt.tee.native.nitro.v1",
       "schema": {
         "schemaId": "pines.chatgpt.tee.native",
-        "version": 4,
-        "digest": "sha256:21d9bee1bbd37da79dc6afc9b6664b53a7cf520d0ee2007696bc655212318a47"
+        "version": 5,
+        "digest": "sha256:e54276775c668f67a1aeac9e7f5470896904314b5211a2a83066f6e6a3ec27c9"
       },
       "savedSchemas": [
         {
           "schemaId": "pines.chatgpt.tee.native",
-          "version": 3,
-          "digest": "sha256:3b3aedbbb49af48a072c7c3de44f0fc1f76360b1c5c57236d19aae2456925eb1"
-        },
-        {
-          "schemaId": "pines.chatgpt.tee.native",
-          "version": 4,
-          "digest": "sha256:21d9bee1bbd37da79dc6afc9b6664b53a7cf520d0ee2007696bc655212318a47"
+          "version": 5,
+          "digest": "sha256:e54276775c668f67a1aeac9e7f5470896904314b5211a2a83066f6e6a3ec27c9"
         }
       ]
     },
@@ -36,14 +31,14 @@
       "profile": "pines.claude.tee.native.nitro.v1",
       "schema": {
         "schemaId": "pines.claude.tee.native",
-        "version": 1,
-        "digest": "sha256:853b4e26195f81837da924292b51b9ce9e1e8feec1380174f25281fb4fb51699"
+        "version": 2,
+        "digest": "sha256:2371d46a8836cd8b5baaf749c85cb9c7e873fb7311e8755ab8485a50c97979dd"
       },
       "savedSchemas": [
         {
           "schemaId": "pines.claude.tee.native",
-          "version": 1,
-          "digest": "sha256:853b4e26195f81837da924292b51b9ce9e1e8feec1380174f25281fb4fb51699"
+          "version": 2,
+          "digest": "sha256:2371d46a8836cd8b5baaf749c85cb9c7e873fb7311e8755ab8485a50c97979dd"
         }
       ]
     },
@@ -52,14 +47,14 @@
       "profile": "pines.grok.tee.native.nitro.v1",
       "schema": {
         "schemaId": "pines.grok.tee.native",
-        "version": 1,
-        "digest": "sha256:69870e59cf44ecd76114f3f35c93de33991edfab6674702381754d920b2adb8b"
+        "version": 2,
+        "digest": "sha256:d07ebe1bdee5775fb513666cd612b78c466b103972cd4ac3c34fe39e575f7e81"
       },
       "savedSchemas": [
         {
           "schemaId": "pines.grok.tee.native",
-          "version": 1,
-          "digest": "sha256:69870e59cf44ecd76114f3f35c93de33991edfab6674702381754d920b2adb8b"
+          "version": 2,
+          "digest": "sha256:d07ebe1bdee5775fb513666cd612b78c466b103972cd4ac3c34fe39e575f7e81"
         }
       ]
     }

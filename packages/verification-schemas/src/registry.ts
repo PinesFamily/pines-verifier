@@ -3,6 +3,11 @@ import chatgptClaims from "../schemas/chatgpt-plan.v2.json" with { type: "json" 
 import chatgptIdentity from "../schemas/chatgpt-plan.v3.json" with { type: "json" };
 import claude from "../schemas/claude-plan.v1.json" with { type: "json" };
 import grok from "../schemas/grok-plan.v1.json" with { type: "json" };
+// Candidates: private response headers and gzip. They carry `lifecycle: "candidate"`
+// and no claims, and they are resolvable only under the private-headers policy.
+import chatgptPrivate from "../schemas/chatgpt-plan.v4.json" with { type: "json" };
+import claudeOrg from "../schemas/claude-plan.v2.json" with { type: "json" };
+import grokActive from "../schemas/grok-plan.v2.json" with { type: "json" };
 import fixture from "../schemas/bringid-simple-fixture.v1.json" with { type: "json" };
 import publicFixture from "../schemas/httpbingo-fixture.v1.json" with { type: "json" };
 import privateFixture from "../schemas/httpbingo-private-fixture.v1.json" with { type: "json" };
@@ -12,7 +17,7 @@ import { parseSchema, schemaDigest } from "./schema.ts";
 import { requireThat } from "./errors.ts";
 import type { SchemaReference, VerificationSchema } from "./types.ts";
 
-export const schemaSources: readonly unknown[] = Object.freeze([chatgpt, fixture, publicFixture, privateFixture, chatgptClaims, chatgptIdentity, claude, grok, benchFixture]);
+export const schemaSources: readonly unknown[] = Object.freeze([chatgpt, fixture, publicFixture, privateFixture, chatgptClaims, chatgptIdentity, claude, grok, benchFixture, chatgptPrivate, claudeOrg, grokActive]);
 
 export async function createRegistry(sources: readonly unknown[], pins: readonly SchemaReference[]) {
   const schemas = new Map<string, Readonly<{ schema: VerificationSchema; reference: SchemaReference }>>();

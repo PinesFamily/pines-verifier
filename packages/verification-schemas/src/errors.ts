@@ -16,6 +16,11 @@ const messages = {
   PARTIAL_TRANSCRIPT: "Authenticated coverage is insufficient to establish message structure",
   PRIVATE_REQUEST_UNSUPPORTED: "Unsupported private request disclosure",
   UNSUPPORTED_LEGACY_CHECK: "Legacy check needs an explicit reviewed conversion",
+  RESPONSE_ENCODING_UNSUPPORTED: "Response content coding is not admitted by this schema",
+  ENCODED_BODY_INVALID: "Encoded response body is not a single well-formed member",
+  REVEALED_LIMIT_EXCEEDED: "Disclosure reveals more bytes than the schema admits",
+  PATH_PARAM_MISMATCH: "Request path parameter is absent, malformed or unbound",
+  SELECTED_SUBJECT_INELIGIBLE: "The proven subject is not an eligible paid personal account",
 } as const;
 
 export type SchemaErrorCode = keyof typeof messages;

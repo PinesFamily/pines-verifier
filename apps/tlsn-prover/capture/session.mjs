@@ -1,16 +1,18 @@
 import {capturedFrom, prepareReplay, requestUrl} from '../../../packages/verification-schemas/src/index.ts';
 import {UUID, check} from '../src/policy.js';
+import {isPrivateHeadersSchema, pathParamsFrom, pathParamUnavailableCode, requiresPathParams} from '../src/private-headers.mjs';
+import {prepareReplayFor} from './schema-adapter.mjs';
 
 // A full browser cookie jar carries unrelated cookies that prepareReplay drops.
 // Bound the raw jar generously; the filtered wire is still bound by maxSentBytes.
 const MAX_COOKIE_JAR = 32768;
 const active = phase => phase === 'waiting' || phase === 'captured';
-const reasons = new Set(['CAPTURE_CANCELLED', 'CAPTURE_NAVIGATED', 'CAPTURE_TAB_CLOSED', 'CAPTURE_OWNER_CHANGED', 'CAPTURE_PERMISSION_LOST', 'CAPTURE_UNAVAILABLE']);
+const reasons = new Set(['CAPTURE_CANCELLED', 'CAPTURE_NAVIGATED', 'CAPTURE_TAB_CLOSED', 'CAPTURE_OWNER_CHANGED', 'CAPTURE_PERMISSION_LOST', 'CAPTURE_UNAVAILABLE', 'PROVIDER_HTTP_401', 'PROVIDER_HTTP_403', 'PROVIDER_HTTP_429', 'PROVIDER_SIGN_IN_REQUIRED', 'CLAUDE_ORG_UNAVAILABLE']);
 
 // Internal extension capability, never a page-facing API. Only take() returns
 // credential material, once, to the extension's trusted replay consumer.
 export class CaptureSession {
-  #schema; #owner; #deadline; #maxHeaderBytes; #now; #changed; #state; #replay;
+  #schema; #owner; #deadline; #maxHeaderBytes; #now; #changed; #state; #replay; #unscoped = false; #timeout = 'CAPTURE_TIMEOUT';
   constructor({schema, owner, deadline, now = Date.now, onChange = () => {}}) {
     // Cookies are only ever an origin-wide credential taken by trigger; an
     // untriggered cookie schema has no qualified capture path here.
@@ -18,6 +20,9 @@ export class CaptureSession {
     check(UUID.test(owner?.runId) && Number.isInteger(owner.tabId) && owner.tabId >= 0 && Number.isInteger(owner.windowId) && owner.windowId >= 0
       && typeof owner.documentId === 'string' && owner.documentId.length > 0 && owner.documentId.length <= 128, 'INVALID_CAPTURE_OWNER');
     check(Number.isSafeInteger(deadline) && deadline > now() && deadline - now() <= schema.limits.sessionTimeoutMs, 'INVALID_CAPTURE_DEADLINE');
+    // A path-parameter schema (D3) exists only in the private-headers class, and its capture must name the parameter.
+    check(!requiresPathParams(schema) || isPrivateHeadersSchema(schema) && schema.capture.trigger, 'UNSUPPORTED_CAPTURE');
+    if (requiresPathParams(schema)) this.#timeout = pathParamUnavailableCode(schema);
     this.#schema = schema; this.#owner = Object.freeze({...owner}); this.#deadline = deadline;
     this.#maxHeaderBytes = schema.limits.maxHeaderBytes; this.#now = now; this.#changed = onChange;
     this.#state = {runId: owner.runId, phase: 'waiting', error: null, headers: [], maxHeaderBytes: this.#maxHeaderBytes, claimable: false};
@@ -27,9 +32,12 @@ export class CaptureSession {
     this.#state.phase = phase; this.#state.error = error;
     this.#changed(structuredClone(this.#state));
   }
-  #expire() { if (active(this.#state.phase) && this.#now() >= this.#deadline) this.#set('failed', 'CAPTURE_TIMEOUT'); }
+  // The page's API traffic came, but none of it named the parameter: say which, not a bare timeout.
+  #expired() { return this.#unscoped ? this.#timeout : 'CAPTURE_TIMEOUT'; }
+  #expire() { if (active(this.#state.phase) && this.#now() >= this.#deadline) this.#set('failed', this.#expired()); }
   status() { this.#expire(); return structuredClone(this.#state); }
   cancel(reason = 'CAPTURE_CANCELLED') {
+    if (reason === 'CAPTURE_TIMEOUT' && requiresPathParams(this.#schema)) reason = this.#expired();
     check(reasons.has(reason), 'INVALID_CAPTURE_REASON');
     this.#expire();
     if (active(this.#state.phase)) this.#set('cancelled', reason);
@@ -40,6 +48,10 @@ export class CaptureSession {
       || details.documentId !== this.#owner.documentId || details.documentLifecycle !== 'active'
       || details.type !== 'xmlhttprequest' || details.initiator !== this.#schema.request.origin
       || typeof details.url !== 'string' || !capturedFrom(this.#schema, details.url) || details.method !== this.#schema.request.method) return false;
+    // Owner, 2026-10-07: the org is the one the provider page itself requests (/api/organizations/<uuid>/...), read from
+    // this request's URL. Its cookie jar is the capture; no other request and no response body names the org.
+    const pathParams = requiresPathParams(this.#schema) ? pathParamsFrom(this.#schema, details.url) : undefined;
+    if (pathParams === null) { this.#unscoped = true; return false; }
     try {
       check(Array.isArray(details.requestHeaders) && details.requestHeaders.length <= 128, 'INVALID_CAPTURE');
       const jar = this.#schema.capture.cookies.length > 0;
@@ -49,7 +61,8 @@ export class CaptureSession {
       // prepareReplay then keeps only the schema's named cookies.
       const selected = details.requestHeaders.filter(header => typeof header.name === 'string' && names.has(header.name.toLowerCase()));
       check(selected.every(header => typeof header.value === 'string' && header.value.length <= (header.name.toLowerCase() === 'cookie' ? MAX_COOKIE_JAR : this.#schema.limits.maxSentBytes)), 'INVALID_CAPTURE');
-      const replay = prepareReplay(this.#schema, {url: details.url, method: details.method, headers: selected});
+      const captured = {url: details.url, method: details.method, headers: selected};
+      const replay = isPrivateHeadersSchema(this.#schema) ? prepareReplayFor(this.#schema, captured, pathParams) : prepareReplay(this.#schema, captured);
       const bytes = value => new TextEncoder().encode(value).length;
       // Status carries names and sizes only, never a header or cookie value.
       this.#state.headers = [...this.#schema.capture.headers.filter(rule => replay.headers[rule.name] !== undefined)

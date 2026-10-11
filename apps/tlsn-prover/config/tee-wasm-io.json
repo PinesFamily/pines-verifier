@@ -1,0 +1,18 @@
+{
+  "format": "pines-tlsn-wasm-io-v1",
+  "upstreamCommit": "47aee45b53e06648c1b2ad3689b367b8c923fdec",
+  "patchSha256": "e0f956cde6a02ab201ca9b852ce04b87262e13030cbd87f7576750f481ce4e47",
+  "ioSourceSha256": "1d94745052b871ddaa67656834a4ae4a77977e24a5646e5d1514b76a84bf4163",
+  "probeEvidenceSha256": "2eb8a78ee8b4d2ba37a9a14a1154ec5a7b19ff2c665035ab92c483afab2560d5",
+  "reproductionEvidenceSha256": "b02f4139f4535a306d0f39b26146fbe759468e2961e4b710e9f8451ebba62a89",
+  "files": {
+    "README.md": "6e0aac4e5ce2d64adedf891e5ebc34472898ab5a115ffe7868fc03d1569b71b0",
+    "package.json": "c0b1238c9f6c44e1b6e5d33eaaeba5ec9b24cc2162315e4f706b7131ab048948",
+    "snippets/web-spawn-05868593a72e2d44/js/spawn.js": "2da411c3ecb06b2d0f7d8bb6a1f65ab034ff5d414dbe4eda1e90d89d257ba01f",
+    "spawn.js": "2da411c3ecb06b2d0f7d8bb6a1f65ab034ff5d414dbe4eda1e90d89d257ba01f",
+    "tlsn_wasm.d.ts": "1781e9934a980f712229f41b42aceb3d9effa41ce01b19b37a592dbaf7f27de4",
+    "tlsn_wasm.js": "2be86bfb05623d5eb69a0de846c23cd76388c79567bbedb7f9131f3a0cb9ce0d",
+    "tlsn_wasm_bg.wasm": "9b1ceba5196ab608a9d55b5606656e0d5516db557bda3c92727ea9f658810a73",
+    "tlsn_wasm_bg.wasm.d.ts": "0a1109f793a267f08fff6ca55c4a7db924ce756ddea5ebb292a88686dac18e37"
+  }
+}

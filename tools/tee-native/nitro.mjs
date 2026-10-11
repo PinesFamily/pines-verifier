@@ -73,5 +73,10 @@ export async function verifyNitroQuote(bytes, expected, policy, now = Date.now()
     check(expected[key] instanceof Uint8Array && expected[key].length > 0 && doc.get(field) instanceof Uint8Array
       && hex(doc.get(field)) === hex(expected[key]), 'ATTESTATION_BINDING');
   }
-  return {pcrTuple: tuple, timestamp: time};
+  // These measurements come from the SAME original signed document validated
+  // above. A fleet ticket binds them to controller-authenticated parent ownership;
+  // PCR0/1/2 alone do not exclude a user-launched copy of the approved image.
+  return {pcrTuple: tuple, timestamp: time,
+    parentPcr3: pcrs.has(3) ? hex(pcrs.get(3)) : null,
+    parentPcr4: pcrs.has(4) ? hex(pcrs.get(4)) : null};
 }

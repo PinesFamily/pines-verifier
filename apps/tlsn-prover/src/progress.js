@@ -41,6 +41,8 @@ export const stepsFor = schemaId => [`Open ${providerOf(schemaId).name}`, 'Revie
 export const steps = stepsFor();
 
 const helpFor = ({name, host, request}) => Object.freeze({
+  CONSENT_REQUIRED: 'Review the privacy explanation and agree before starting a new verification.',
+  PREPARATION_EXPIRED: 'Preparation expired. Return to Pines and start again.',
   RATE_LIMITED: 'Too many verification attempts. Wait for the retry time shown above.',
   VERIFICATION_BUDGET_EXHAUSTED: 'This wallet has no verifications available in its rolling 30-day allowance. Return to Pines to check your saved verifications.',
   HARDWARE_PROFILE_UNQUALIFIED: 'Private verification is not ready. Return to Pines and retry after the service is available.',
@@ -83,6 +85,8 @@ const helpFor = ({name, host, request}) => Object.freeze({
   PROVIDER_RESPONSE_UNSUPPORTED: `${name} returned an unsupported response. Return to Pines and try again.`,
   OPEN_ONE_PROVIDER_TAB: 'Keep exactly one provider tab open in this window, then try again.',
   PROOF_TIMEOUT: 'The verification window expired. Start a new verification from Pines.',
+  SESSION_POLICY_UNSUPPORTED: 'This verification needs a newer Pines Verifier. Update the extension, then start again.',
+  SESSION_POLICY_INVALID: 'Pines returned an invalid session time limit. Start a new verification.',
   WORKER_RESTARTED: 'The proof worker stopped. Pines can still check for a saved receipt. Return to Pines to retry.',
   WORKER_UNAVAILABLE: 'The verification worker could not start. Reload the Pines extension and retry Verify from Pines.',
   EXTENSION_UNAVAILABLE: 'The extension could not finish this step. Reload the Pines extension in chrome://extensions, then retry Verify from Pines.',
@@ -94,6 +98,13 @@ const helpFor = ({name, host, request}) => Object.freeze({
   PROVIDER_PERMISSION_DENIED: `Access to ${host} was declined. Verification was cancelled. Start again from Pines when you’re ready.`,
   CAPTURE_PERMISSION_LOST: `Provider access was removed. Return to Pines and start verification again.`,
   PERMISSION_REVOKED: `The extension lost a required permission. Restore its access to ${name} and retry Verify from Pines.`,
+  // private-headers-gzip-v1 refusals. Each stops before any account fact reaches Pines.
+  RESPONSE_ENCODING_UNSUPPORTED: `${name} answered in a format this release does not verify. Try again later; share the error code if it repeats.`,
+  RESPONSE_REVEAL_LIMIT: `${name} returned more account data than this release verifies. Share the error code so compatibility can be checked.`,
+  RESPONSE_ENCODED_INVALID: `${name} returned a compressed response that could not be checked. Try again later; share the error code if it repeats.`,
+  CLAUDE_ORG_UNAVAILABLE: 'Claude did not open an organization in the new tab. Sign in to your paid personal Claude account there, then start again from Pines.',
+  CLAUDE_ORG_MISMATCH: 'Claude answered for a different organization than the one requested. Start again from Pines.',
+  CLAUDE_ORG_INELIGIBLE: 'The Claude organization open in the new tab is not a paid personal Pro or Max plan. Switch claude.ai to your personal paid organization, then start again from Pines.',
 });
 const help = Object.freeze(Object.fromEntries(Object.entries(providers).map(([schemaId, provider]) => [schemaId, helpFor(provider)])));
 export function failureHelp(code, linkedWallet, schemaId) {
@@ -119,14 +130,15 @@ export function progressOf(state, now = Date.now()) {
   const {name} = providerOf(state.schema?.schemaId);
   const bound = state.error === 'PROVIDER_ACCOUNT_BOUND';
   let step = 0;
-  if (state.phase === 'awaiting-disclosure') step = 1;
+  if (['awaiting-disclosure', 'awaiting-consent', 'ready'].includes(state.phase)) step = 1;
+  if (state.upfrontConsent && state.preparing === false && !stopped) step = 2;
   if (state.phase === 'proving' || state.phase === 'completed') step = 2;
   if (complete) step = 3;
   const detail = step === 0
     ? state.phase === 'awaiting-permission' ? `Allow access to ${providerOf(state.schema?.schemaId).host} using the button below. Chrome remembers this choice until you remove access in the extension settings.`
       : state.phase === 'requesting' ? `Reading your plan. Keep the ${name} tab open.`
       : state.providerStarted ? `Sign in if ${name} asks. Keep its tab open.` : `Opening ${name} in a new tab…`
-    : step === 1 ? 'Check it below, then share.'
+    : step === 1 ? state.upfrontConsent ? state.phase === 'ready' ? 'Starting your authorized verification…' : 'Review the privacy explanation, then agree and verify. No proof slot is reserved yet.' : 'Check it below, then share.'
     : state.phase === 'proving' ? 'Checking the proof…'
     : recovery ? 'Pines hasn’t confirmed it yet.' : 'Saving with Pines…';
   const title = bound ? 'Account already linked'

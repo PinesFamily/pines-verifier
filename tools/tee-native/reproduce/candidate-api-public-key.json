@@ -1,0 +1,9 @@
+{
+  "apiKey": "aa2381f0f5817a8e109a6b8eea3061224738c3bf77ea9b0df447023129ca1abd",
+  "fleetControllerKey": "a87a8db98a40c5dd180121a88d035019664de16c9d96934c490acd801082344e",
+  "keyedIdentity": {
+    "format": "pines-sydney-identity-trust-v2",
+    "keyArn": "arn:aws:kms:ap-southeast-2:594194277294:key/3d63a788-0acf-42c1-b20c-1c3bdd9e2375",
+    "configurationAuthority": "ece4f5e90c2344e7551daa7e933b0b2a32b28b4d108e9c1636b0dce786822cc7"
+  }
+}

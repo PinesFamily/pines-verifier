@@ -12,7 +12,7 @@ export function byteQueue(limit = 16 * 1024 * 1024) {
   };
 }
 
-export async function openRaw(url) {
+export async function openRaw(url, {connectMs = 10000} = {}) {
   const socket = new WebSocket(url); socket.binaryType = 'arraybuffer';
   const queue = byteQueue(); let closed = false, total = 0;
   socket.onmessage = ({data}) => {try {check(data instanceof ArrayBuffer, 'BINARY_REQUIRED'); total += data.byteLength; check(total <= 70 * 1024 * 1024, 'WIRE_LIMIT'); queue.push(new Uint8Array(data));} catch {queue.fail(); socket.close();}};
@@ -20,7 +20,7 @@ export async function openRaw(url) {
   socket.onerror = () => queue.fail();
   let timer;
   try {await Promise.race([new Promise((resolve, reject) => {socket.onopen = resolve; socket.addEventListener('error', reject, {once: true}); socket.addEventListener('close', reject, {once: true});}),
-    new Promise((_, reject) => {timer = setTimeout(() => {socket.close(); reject(Error('CONNECT_DEADLINE'));}, 10000);})]);} finally {clearTimeout(timer);}
+    new Promise((_, reject) => {timer = setTimeout(() => {socket.close(); reject(Error('CONNECT_DEADLINE'));}, connectMs);})]);} finally {clearTimeout(timer);}
   return {read: () => queue.read(), async write(bytes) {check(!closed && socket.bufferedAmount + bytes.byteLength <= 16 * 1024 * 1024, 'WIRE_QUEUE'); socket.send(bytes);},
     async close() {closed = true; queue.end(); socket.close();}, abort() {queue.fail(); socket.close();}};
 }

@@ -1,6 +1,6 @@
 import { requireThat } from "./errors.ts";
 import { canonicalJson, parseJson } from "./json.ts";
-import { requestBody, requestTarget, requestUrl } from "./schema.ts";
+import { acceptEncoding, requestBody, requestTarget, requestUrl } from "./schema.ts";
 import { encoder } from "./http.ts";
 import type { CapturedRequest, ReplayRequest, VerificationSchema } from "./types.ts";
 
@@ -10,16 +10,23 @@ export function validateHeader(value: string, rule: "bearer" | "visible-ascii"):
 
 // The request credentials may be taken from: the proven request itself, or — for an origin-wide cookie
 // credential — any same-origin request under the schema's trigger prefix. Never another origin.
-export function capturedFrom(schema: VerificationSchema, url: string): boolean {
-  if (!schema.capture.trigger) return url === requestUrl(schema);
+export function capturedFrom(schema: VerificationSchema, url: string, pathParams?: Readonly<Record<string, string>>): boolean {
+  if (!schema.capture.trigger) {
+    try { return url === requestUrl(schema, pathParams); } catch { return false; }
+  }
   let parsed: URL;
   try { parsed = new URL(url); } catch { return false; }
   return parsed.origin === schema.request.origin && !parsed.username && !parsed.password && !parsed.hash
     && parsed.pathname.startsWith(schema.capture.trigger.pathPrefix);
 }
 
-export function prepareReplay(schema: VerificationSchema, captured: CapturedRequest): ReplayRequest {
-  requireThat(captured.method === schema.request.method && capturedFrom(schema, captured.url), "INVALID_CAPTURE");
+export type ReplayOptions = Readonly<{ pathParams?: Readonly<Record<string, string>> }>;
+
+export function prepareReplay(schema: VerificationSchema, captured: CapturedRequest, options: ReplayOptions = {}): ReplayRequest {
+  // A declared template is instantiated before anything else, so a missing or
+  // malformed parameter refuses here rather than producing a request to nowhere.
+  const target = requestTarget(schema, options.pathParams);
+  requireThat(captured.method === schema.request.method && capturedFrom(schema, captured.url, options.pathParams), "INVALID_CAPTURE");
   requireThat(Array.isArray(captured.headers) && captured.headers.length <= 128, "INVALID_CAPTURE");
   const original = new Map<string, string>();
   for (const header of captured.headers) {
@@ -55,10 +62,12 @@ export function prepareReplay(schema: VerificationSchema, captured: CapturedRequ
   requireThat(typeof capturedBody === "string" && encoder.encode(capturedBody).length <= schema.limits.maxSentBytes, "INVALID_CAPTURE");
   requireThat(schema.request.body.kind === "empty" ? capturedBody === "" : canonicalJson(parseJson(capturedBody, schema.limits.maxJsonDepth)) === body, "INVALID_CAPTURE");
   headers.host = new URL(schema.request.origin).host;
-  headers["accept-encoding"] = "identity";
+  // One derivation, shared with both request validators: gzip only when the schema's
+  // privacy block lists it, identity otherwise. `replay.headers` still refuses to name it.
+  headers["accept-encoding"] = acceptEncoding(schema);
   headers.connection = "close";
   if (schema.request.method === "POST") headers["content-length"] = String(encoder.encode(body).length);
-  const wire = `${schema.request.method} ${requestTarget(schema)} HTTP/1.1\r\n` + Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`).join("") + "\r\n" + body;
+  const wire = `${schema.request.method} ${target} HTTP/1.1\r\n` + Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`).join("") + "\r\n" + body;
   requireThat(encoder.encode(wire).length <= schema.limits.maxSentBytes, "LIMIT_EXCEEDED");
-  return Object.freeze({ url: requestUrl(schema), method: schema.request.method, headers: Object.freeze(headers), body });
+  return Object.freeze({ url: schema.request.origin + target, method: schema.request.method, headers: Object.freeze(headers), body });
 }

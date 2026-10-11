@@ -15,7 +15,28 @@ export type CustomHandler =
   | "claude-org-uuid-v1" | "claude-paid-tier-v1" | "claude-paid-capabilities-v1"
   | "grok-user-uuid-v1" | "grok-paid-tier-v1";
 // Which document the fields are read from. Absent: the response root, which must be an object.
-export type Selector = Readonly<{ kind: "claude-paid-personal-org-v1" | "grok-paid-subscription-v1" }>;
+// `maxItems` is optional so every selector pinned before it existed keeps its exact digest.
+export type Selector =
+  | Readonly<{ kind: "claude-paid-personal-org-v1" }>
+  // The per-org route answers one organization, so the list's "exactly one qualifies"
+  // ambiguity check cannot apply; the same predicate judges that single object.
+  | Readonly<{ kind: "claude-paid-personal-org-single-v1" }>
+  | Readonly<{ kind: "grok-paid-subscription-v1"; maxItems?: number }>;
+
+// A declared path parameter. The value is authenticated in the request start line and
+// must equal the selected document's `bindsTo` pointer, so a prover cannot prove one
+// organization's request against another organization's response.
+export type PathParam = Readonly<{ kind: "lowercase-uuid-v1"; bindsTo: string }>;
+export type PathParams = Readonly<Record<string, PathParam>>;
+
+// Response-header privacy. Only the framing values stay public; every other header
+// value is one complete hidden range. Header NAMES stay public and stay allowlisted.
+export type ResponsePrivacy = Readonly<{
+  mode: "private-headers-v1";
+  visibleHeaders: readonly ["content-type", "content-length", "transfer-encoding", "content-encoding"];
+  encodings: readonly ("gzip" | "identity")[];
+}>;
+export type ResponseDisclosureMode = "selective" | "complete" | "private-headers";
 
 export type VerificationSchema = Readonly<{
   format: "pines-verification-schema-v1";
@@ -29,6 +50,8 @@ export type VerificationSchema = Readonly<{
     path: string;
     query: Readonly<Record<string, string>>;
     body: Readonly<{ kind: "empty" }> | Readonly<{ kind: "json"; value: Json }>;
+    // Optional, so every schema pinned before it existed keeps its exact digest.
+    pathParams?: PathParams;
   }>;
   capture: Readonly<{
     navigationUrl: string;
@@ -50,16 +73,26 @@ export type VerificationSchema = Readonly<{
     maxSentBytes: number;
     maxRecvBytes: number;
     maxHeaderBytes: number;
+    // The de-chunked wire body, i.e. the ENCODED body when a content coding applies.
     maxBodyBytes: number;
     maxJsonDepth: number;
     sessionTimeoutMs: number;
     maxRecvRecords: number;
     concurrency: number;
+    // Optional, and only together with `response.privacy`, so every existing digest
+    // is unchanged. Decoding stops at maxDecodedBodyBytes + 1 before allocating.
+    maxDecodedBodyBytes?: number;
+    maxChunks?: number;
+    maxRevealedRecvBytes?: number;
+    maxRevealedSentBytes?: number;
   }>;
   response: Readonly<{ status: 200; contentType: "application/json"; disclosure: "full-json-body";
     // Optional to preserve every existing schema digest. Set-Cookie is always
     // private; this closed list adds the reviewed opaque ChatGPT state header.
-    secretHeaders?: readonly ("x-oai-is-update")[] }>;
+    secretHeaders?: readonly ("x-oai-is-update")[];
+    // Optional for the same reason. Present exactly when the private-headers
+    // disclosure mode applies: the two are refused apart.
+    privacy?: ResponsePrivacy }>;
   selector?: Selector;
   fields: readonly Field[];
   checks: readonly Check[];

@@ -10,9 +10,10 @@ const children = [];
 let stopping = false;
 function stop() {if (stopping) return; stopping = true; for (const c of children) c.kill('SIGTERM');
   setTimeout(() => {for (const c of children) c.kill('SIGKILL'); process.exit(1);}, 2500).unref();}
-for (const mode of ['enclave-ingress', 'enclave-egress']) {
+for (const mode of ['enclave-ingress', 'enclave-control', 'enclave-egress','enclave-kms-egress','enclave-kms-handoff']) {
   const child = spawn('/app/bin/pines-nitro-runtime', [mode], {stdio: 'ignore'}); children.push(child); child.on('exit', stop); child.on('error', stop);
 }
-const app = spawn(process.execPath, ['/app/tools/tee-native/hardware/enclave.mjs'], {stdio: 'ignore', env: {PATH: '/usr/local/bin:/usr/bin:/bin'}});
+const app = spawn(process.execPath, ['--max-old-space-size=384','/app/tools/tee-native/hardware/enclave.mjs'],
+  {stdio:'ignore',env:{PATH:'/usr/local/bin:/usr/bin:/bin',MALLOC_ARENA_MAX:'2'}});
 children.push(app); app.on('exit', stop); app.on('error', stop);
 process.on('SIGTERM', stop); process.on('SIGINT', stop);

@@ -43,5 +43,20 @@
     "schemaId": "pines.fixture.bench",
     "version": 1,
     "digest": "sha256:b5b5f3a4a71956d34e1ecca2bb2bd01b1c1db8a6efba9eb6d4c967915daee4c0"
+  },
+  {
+    "schemaId": "pines.chatgpt.plan",
+    "version": 4,
+    "digest": "sha256:84f7c2581973dd0295e8e1bf88b1b2c6908e0781477c5dfd9a0132ab9769d255"
+  },
+  {
+    "schemaId": "pines.claude.plan",
+    "version": 2,
+    "digest": "sha256:d73f15c99f5cf5213b373ef46c2892195b6324de8d63a007aac59971f7111141"
+  },
+  {
+    "schemaId": "pines.grok.plan",
+    "version": 2,
+    "digest": "sha256:11a7a3cf84e7362b7e6e8d20461561707b566187bcdf374b853791a39c1c7be9"
   }
 ]

@@ -1,0 +1,197 @@
+diff --git a/crates/wasm/src/io.rs b/crates/wasm/src/io.rs
+index 32e92faf..436a0875 100644
+--- a/crates/wasm/src/io.rs
++++ b/crates/wasm/src/io.rs
+@@ -54,6 +54,12 @@ struct AdapterState {
+     pending_read: Option<JsFuture>,
+     /// Waker for when data becomes available.
+     read_waker: Option<Waker>,
++    /// One accepted write, retained until its JavaScript promise settles.
++    pending_write: Option<JsFuture>,
++    /// One close promise, retained until it settles.
++    pending_close: Option<JsFuture>,
++    /// Whether close has started.
++    closing: bool,
+     /// Whether the stream is closed.
+     closed: bool,
+     /// Any error that occurred.
+@@ -85,6 +91,9 @@ impl JsIoAdapter {
+                 eof: false,
+                 pending_read: None,
+                 read_waker: None,
++                pending_write: None,
++                pending_close: None,
++                closing: false,
+                 closed: false,
+                 error: None,
+             })),
+@@ -196,76 +205,133 @@ impl AsyncRead for JsIoAdapter {
+     }
+ }
+ 
++// Drain the single previously accepted write. A blocked poll_write has not
++// accepted its current buffer, so cancelling it or replacing its buffer is
++// safe.
++fn poll_pending_write(state: &mut AdapterState, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
++    let Some(future) = state.pending_write.as_mut() else {
++        return Poll::Ready(Ok(()));
++    };
++    match Pin::new(future).poll(cx) {
++        Poll::Pending => Poll::Pending,
++        Poll::Ready(result) => {
++            state.pending_write = None;
++            match result {
++                Ok(_) => Poll::Ready(Ok(())),
++                Err(_) => {
++                    let message = "JavaScript write failed".to_owned();
++                    state.error = Some(message.clone());
++                    Poll::Ready(Err(std::io::Error::other(message)))
++                }
++            }
++        }
++    }
++}
++
+ impl AsyncWrite for JsIoAdapter {
+     fn poll_write(
+         self: Pin<&mut Self>,
+-        _cx: &mut Context<'_>,
++        cx: &mut Context<'_>,
+         buf: &[u8],
+     ) -> Poll<std::io::Result<usize>> {
+         let this = self.get_mut();
+-        let state = match this.lock_state() {
++        let mut state = match this.lock_state() {
+             Ok(guard) => guard,
+             Err(e) => return Poll::Ready(Err(e)),
+         };
+-
+-        // Check for errors.
+         if let Some(ref err) = state.error {
+-            return Poll::Ready(Err(std::io::Error::new(
+-                std::io::ErrorKind::Other,
+-                err.clone(),
+-            )));
++            return Poll::Ready(Err(std::io::Error::other(err.clone())));
+         }
+-
+-        if state.closed {
++        if state.closing || state.closed {
+             return Poll::Ready(Err(std::io::Error::new(
+                 std::io::ErrorKind::BrokenPipe,
+                 "stream closed",
+             )));
+         }
+-
+-        // Create Uint8Array from buffer.
++        match poll_pending_write(&mut state, cx) {
++            Poll::Pending => return Poll::Pending,
++            Poll::Ready(Err(error)) => return Poll::Ready(Err(error)),
++            Poll::Ready(Ok(())) => {}
++        }
++        if buf.is_empty() {
++            return Poll::Ready(Ok(0));
++        }
+         let array = Uint8Array::from(buf);
+-
+-        // Fire-and-forget write: common pattern for WASM IO.
+-        // We don't wait for the Promise to resolve to avoid backpressure.
+         match this.inner.write(&array) {
+-            Ok(_promise) => {
+-                // Return success immediately without waiting for Promise.
++            Ok(promise) => {
++                // This buffer is accepted exactly once. The next write or flush
++                // must await this promise before another buffer can be accepted.
++                state.pending_write = Some(JsFuture::from(promise));
+                 Poll::Ready(Ok(buf.len()))
+             }
+-            Err(e) => {
+-                let err_msg = format!("write error: {:?}", e);
+-                tracing::error!("JsIo write failed: {}", err_msg);
+-                Poll::Ready(Err(std::io::Error::new(std::io::ErrorKind::Other, err_msg)))
++            Err(_) => {
++                let message = "JavaScript write failed".to_owned();
++                state.error = Some(message.clone());
++                Poll::Ready(Err(std::io::Error::other(message)))
+             }
+         }
+     }
+ 
+-    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+-        // JS streams typically auto-flush.
+-        Poll::Ready(Ok(()))
++    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
++        let this = self.get_mut();
++        let mut state = match this.lock_state() {
++            Ok(guard) => guard,
++            Err(e) => return Poll::Ready(Err(e)),
++        };
++        if let Some(ref err) = state.error {
++            return Poll::Ready(Err(std::io::Error::other(err.clone())));
++        }
++        poll_pending_write(&mut state, cx)
+     }
+ 
+-    fn poll_close(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
++    fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+         let this = self.get_mut();
+         let mut state = match this.lock_state() {
+             Ok(guard) => guard,
+             Err(e) => return Poll::Ready(Err(e)),
+         };
+-
+         if state.closed {
+-            return Poll::Ready(Ok(()));
++            return Poll::Ready(match &state.error {
++                Some(err) => Err(std::io::Error::other(err.clone())),
++                None => Ok(()),
++            });
+         }
+-
+-        // Fire-and-forget close to avoid blocking.
+-        match this.inner.close() {
+-            Ok(_promise) => {
+-                state.closed = true;
+-                Poll::Ready(Ok(()))
++        state.closing = true;
++        // Drain the accepted write before closing the channel. Even a rejected
++        // write must proceed to close, while retaining its original failure.
++        if poll_pending_write(&mut state, cx).is_pending() {
++            return Poll::Pending;
++        }
++        if state.pending_close.is_none() {
++            match this.inner.close() {
++                Ok(promise) => state.pending_close = Some(JsFuture::from(promise)),
++                Err(_) => {
++                    state.closed = true;
++                    let message = state
++                        .error
++                        .get_or_insert_with(|| "JavaScript close failed".to_owned());
++                    return Poll::Ready(Err(std::io::Error::other(message.clone())));
++                }
+             }
+-            Err(e) => {
+-                let err_msg = format!("close error: {:?}", e);
+-                Poll::Ready(Err(std::io::Error::new(std::io::ErrorKind::Other, err_msg)))
++        }
++        let future = state
++            .pending_close
++            .as_mut()
++            .expect("close future initialized");
++        match Pin::new(future).poll(cx) {
++            Poll::Pending => Poll::Pending,
++            Poll::Ready(result) => {
++                state.pending_close = None;
++                state.closed = true;
++                if result.is_err() {
++                    state
++                        .error
++                        .get_or_insert_with(|| "JavaScript close failed".to_owned());
++                }
++                Poll::Ready(match &state.error {
++                    Some(err) => Err(std::io::Error::other(err.clone())),
++                    None => Ok(()),
++                })
+             }
+         }
+     }

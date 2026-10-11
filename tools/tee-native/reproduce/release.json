@@ -1,21 +1,25 @@
 {
-  "status": "**Release candidate.** Hardware qualification and deployment are pending. Until this release is deployed, the live service runs the previous one (extension 1.2.1, enclave PCR0 `f866e1cf…`), which was built from source that is not published.",
-  "extension": {
-    "id": "lanmbpkmblcijblbllbikenpnceidmpj",
-    "version": "1.2.2",
-    "sourceRevision": "06cc73fe97b17a9816fb77d9404f96794bb51f63",
-    "sha256": "87c4599cf98942b39ca8e75d9ffc6f1c6a468e36094a2caffd9c5b2b98898f9d"
-  },
+  "status": "Live: since 2026-10-10 app.pines.family installs Pines Verifier 1.13.13 (package SHA-256 689d97b026bf5352c360694c921cc7054be615e138489b331b2276c2b48bdac5), which discloses only to an enclave with these PCRs. Two clean builds of the exported source reproduce the PCRs and the four executables.",
   "enclave": {
-    "sourceEpoch": 1791158400,
+    "sourceCommit": "64a71c1443353f24c6db917e7b80e0adc92b475f",
+    "sourceEpoch": 1791553777,
+    "apiPublicKeyFile": "candidate-api-public-key.json",
+    "contextFilesSha256": "b5a40c3fa6f4d80a2d57796d8830275266753fa68e0fe8cd8ec0f47201dc6bac",
+    "contextFiles": 164,
     "pcrs": [
-      "ef13f7a593fbf5881087f5e96c9dee75597b9780c0cfe953638d79d3a226ceadfbbe0390098a5e1a2d9306c8f625f30c",
+      "660d55a345e8dde5e48be9800c72ae2df4fb8d435becb689cf15d1f55e6e0219883bdc79d8525dd0abba85467590ee99",
       "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-      "4c39fefdd473226957d2ea4e688dce321eb9b5930af28008a4b34cc61e1c1846a565458ff2afa2f43a0f4220e37c9b6a"
+      "6d68bf7f166ce7869567623a2b90749dfcf939c2e095510ee0102354f5235c566c785c5fe481f5d67c252fec53d2bf51"
     ],
-    "eifSha256": "d8b80bc5479567b06edaee4bf38945f0dc1ecf9d14e2df9d993d9503e6ccbcf6"
+    "executables": {
+      "node": "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068",
+      "pines-nitro-runtime": "efaf3635d62c7474d266f0efc109d73359c905d4afca120b6805b8034234fcd2",
+      "tee-hardware": "3dffc6178ed7076900f84cb4b7a23478f585f41dd1698989bbc2709b26245868",
+      "tee-identity": "b6f99bd5adb282ebce56832a28120c81b776cbf59ea73737be122ea7c58ba838"
+    },
+    "selectedEifSha256": "9288fe2291492f023cd84e47fda63d117f0365cfbce0a5c33530d9c763793bfe"
   },
   "attestationWasm": {
-    "sha256": "132fd8b3d6178f6bcb28291501f733e518fa644afc2a52d59003ea415494c19f"
+    "sha256": "dad876167a51019dcb81495552a48ca20da285487d3a9c2ead43aff288b224bf"
   }
 }

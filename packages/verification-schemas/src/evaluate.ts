@@ -2,15 +2,18 @@ import { requireThat, reject } from "./errors.ts";
 import { canonicalJson, parseJson, selectJson } from "./json.ts";
 import { headerValue, parseHttp, utf8 } from "./http.ts";
 import type { HttpMessage } from "./http.ts";
-import { requestBody, requestTarget } from "./schema.ts";
+import { acceptEncoding, matchRequestTarget, requestBody } from "./schema.ts";
 import { validateHeader } from "./capture.ts";
 import { inspectDisclosedRequest } from "./redacted-request.ts";
 import { inspectDisclosedResponse } from "./redacted-response.ts";
-import type { EvidenceFacts, Json, VerificationSchema, VerifiedBytes, VerifiedExchange } from "./types.ts";
+import type { EvidenceFacts, Json, ResponseDisclosureMode, VerificationSchema, VerifiedBytes, VerifiedExchange } from "./types.ts";
 
-export function validateRequest(schema: VerificationSchema, request: HttpMessage): void {
-  requireThat(request.startLine === `${schema.request.method} ${requestTarget(schema)} HTTP/1.1`, "SCOPE_MISMATCH");
-  const fixed = { ...schema.replay.headers, host: new URL(schema.request.origin).host, "accept-encoding": "identity", connection: "close" };
+/** Returns the authenticated path parameters, `{}` for a schema that declares none. */
+export function validateRequest(schema: VerificationSchema, request: HttpMessage): Readonly<Record<string, string>> {
+  const match = /^([A-Z]+) (\S+) HTTP\/1\.1$/.exec(request.startLine);
+  requireThat(match && match[1] === schema.request.method, "SCOPE_MISMATCH");
+  const pathParams = matchRequestTarget(schema, match![2]!);
+  const fixed = { ...schema.replay.headers, host: new URL(schema.request.origin).host, "accept-encoding": acceptEncoding(schema), connection: "close" };
   for (const [name, value] of Object.entries(fixed)) requireThat(headerValue(request, name) === value, "SCOPE_MISMATCH");
   const allowed = new Set([...Object.keys(fixed), "content-length", ...schema.capture.headers.map(rule => rule.name)]);
   if (schema.capture.cookies.length) allowed.add("cookie");
@@ -33,6 +36,7 @@ export function validateRequest(schema: VerificationSchema, request: HttpMessage
   }
   if (schema.request.body.kind === "empty") requireThat(request.body.length === 0, "SCOPE_MISMATCH");
   else requireThat(canonicalJson(parseJson(utf8(request.body), schema.limits.maxJsonDepth)) === requestBody(schema), "SCOPE_MISMATCH");
+  return pathParams;
 }
 
 export function deriveSubjectKey(schema: VerificationSchema, value: Json, recipient: string): string {
@@ -64,13 +68,31 @@ function claudePaidTier(value: Json): "max" | "pro" | null {
   const match = CLAUDE_TIER.exec(value);
   return match ? match[1] as "max" | "pro" : null;
 }
-function isClaudePaidPersonalOrg(value: Json): boolean {
+export function isClaudePaidPersonalOrg(value: Json): boolean {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const marker = claudePaidMarker(value.capabilities ?? null);
   // Personal orgs only: no Team (`raven`) type and no parent organization.
   return marker !== null && marker === claudePaidTier(value.rate_limit_tier ?? null)
     && value.raven_type === null && value.parent_organization_uuid === null;
 }
+// The same predicate the single-object selector applies, exported so a client that has
+// to choose among several qualifying personal organizations cannot disagree with the
+// enclave's judgement. Highest tier first (max before pro), then the provider's own
+// order within a tier. This is a convenience for a caller: the enclave never ranks.
+export function rankClaudePersonalOrgs(document: Json): readonly Readonly<{ uuid: string; tier: "max" | "pro" }>[] {
+  if (!Array.isArray(document) || document.length > 64) return Object.freeze([]);
+  const ranked: Readonly<{ uuid: string; tier: "max" | "pro" }>[] = [];
+  for (const tier of ["max", "pro"] as const) {
+    for (const entry of document) {
+      if (!isClaudePaidPersonalOrg(entry)) continue;
+      const value = entry as Record<string, Json>;
+      if (claudePaidMarker(value.capabilities ?? null) !== tier) continue;
+      if (typeof value.uuid === "string" && CLAUDE_UUID.test(value.uuid)) ranked.push(Object.freeze({ uuid: value.uuid, tier }));
+    }
+  }
+  return Object.freeze(ranked);
+}
+
 // Grok's `/rest/subscriptions` lists the signed-in xAI user's subscriptions: X-billed (Basic, Premium,
 // Premium+) and xAI-billed (SuperGrok Lite, SuperGrok, Plus, Pro) side by side. The tier names and their
 // order are grok.com's own client code (`getSubscriptionLevel`, read 2026-09-27): it keeps ACTIVE items and
@@ -84,10 +106,12 @@ const GROK_PAID_TIERS: readonly string[] = Object.freeze([
   "SUBSCRIPTION_TIER_SUPER_GROK_PLUS", "SUBSCRIPTION_TIER_SUPER_GROK_PRO",
 ]);
 const grokPaidRank = (value: Json) => typeof value === "string" ? GROK_PAID_TIERS.indexOf(value) : -1;
-function selectGrokSubscription(document: Json): Json {
+function selectGrokSubscription(document: Json, maxItems: number): Json {
   requireThat(document !== null && typeof document === "object" && !Array.isArray(document), "INVALID_JSON");
   const items = document.subscriptions;
-  requireThat(Array.isArray(items) && items.length <= 64, "INVALID_JSON");
+  // The filtered route answers only ACTIVE items, so a tight cap is both the cost
+  // bound and the fail-closed behaviour if the provider ever ignores `?status`.
+  requireThat(Array.isArray(items) && items.length <= maxItems, "INVALID_JSON");
   let selected: Json | undefined, rank = -1;
   for (const item of items) {
     requireThat(item !== null && typeof item === "object" && !Array.isArray(item), "INVALID_JSON");
@@ -107,14 +131,25 @@ function selectDocument(schema: VerificationSchema, document: Json): Json {
       requireThat(selected.length === 1, "CHECK_FAILED");
       return selected[0]!;
     }
-    case "grok-paid-subscription-v1": return selectGrokSubscription(document);
+    // The per-organization route answers exactly one organization, so there is no
+    // list to disambiguate; the same predicate judges that one object.
+    case "claude-paid-personal-org-single-v1": {
+      requireThat(isClaudePaidPersonalOrg(document), "SELECTED_SUBJECT_INELIGIBLE");
+      return document;
+    }
+    case "grok-paid-subscription-v1": return selectGrokSubscription(document, schema.selector.maxItems ?? 64);
     default: return reject("INVALID_SCHEMA");
   }
 }
 
-function facts(schema: VerificationSchema, response: Json, recipient: string): EvidenceFacts {
+function facts(schema: VerificationSchema, response: Json, recipient: string, pathParams: Readonly<Record<string, string>>): EvidenceFacts {
   const document = selectDocument(schema, response);
   requireThat(document !== null && typeof document === "object" && !Array.isArray(document), "INVALID_JSON");
+  // A proven request path parameter must equal the field it declares in the SELECTED
+  // document, so a prover cannot pair one subject's request with another's response.
+  for (const [name, declared] of Object.entries(schema.request.pathParams ?? {})) {
+    requireThat(selectJson(document, declared.bindsTo) === pathParams[name], "PATH_PARAM_MISMATCH");
+  }
   const values: Record<string, Json> = Object.create(null);
   for (const field of schema.fields) {
     const value = selectJson(document, field.pointer);
@@ -158,21 +193,20 @@ function facts(schema: VerificationSchema, response: Json, recipient: string): E
 // evidence of TLS authenticity and must not be submitted to the API as proof.
 export function previewExchange(schema: VerificationSchema, sent: Uint8Array, recv: Uint8Array, recipient: string): EvidenceFacts {
   const request = parseHttp(sent, schema, "sent");
-  validateRequest(schema, request);
-  return responseFacts(schema, recv, recipient);
+  const pathParams = validateRequest(schema, request);
+  return factsFromResponse(schema, parseHttp(recv, schema, "recv"), recipient, pathParams);
 }
 
-function responseFacts(schema: VerificationSchema, recv: Uint8Array, recipient: string): EvidenceFacts {
-  return factsFromResponse(schema, parseHttp(recv, schema, "recv"), recipient);
-}
-
-function factsFromResponse(schema: VerificationSchema, response: HttpMessage, recipient: string): EvidenceFacts {
+function factsFromResponse(schema: VerificationSchema, response: HttpMessage, recipient: string, pathParams: Readonly<Record<string, string>>): EvidenceFacts {
   requireThat(/^HTTP\/1\.1 200 [\x20-\x7e]*$/.test(response.startLine), "SCOPE_MISMATCH");
   const type = headerValue(response, "content-type");
   requireThat(type !== undefined && /^application\/json(?:\s*;\s*charset=(?:utf-8|"utf-8"))?$/i.test(type), "SCOPE_MISMATCH");
-  const encoding = headerValue(response, "content-encoding");
-  requireThat(encoding === undefined || encoding.toLowerCase() === "identity", "SCOPE_MISMATCH");
-  return facts(schema, parseJson(utf8(response.body), schema.limits.maxJsonDepth), recipient);
+  // `parseHttp` has already decoded an admitted coding; this is the independent
+  // restatement of what the schema admits, on the same bytes the facts come from.
+  const encoding = headerValue(response, "content-encoding")?.toLowerCase();
+  if (!schema.response.privacy) requireThat(encoding === undefined || encoding === "identity", "SCOPE_MISMATCH");
+  else requireThat((schema.response.privacy.encodings as readonly string[]).includes(encoding ?? "identity"), "RESPONSE_ENCODING_UNSUPPORTED");
+  return facts(schema, parseJson(utf8(response.body), schema.limits.maxJsonDepth), recipient, pathParams);
 }
 
 export function requireCompleteCoverage(transcript: VerifiedBytes, limit: number): void {
@@ -186,16 +220,32 @@ export function requireCompleteCoverage(transcript: VerifiedBytes, limit: number
   requireThat(end === transcript.originalLength, "PARTIAL_TRANSCRIPT");
 }
 
+/** The public request start line, read back from bytes a request inspector has already
+ *  proven are authenticated and well formed. It is never parsed before that proof. */
+function provenStartLine(bytes: Uint8Array): string {
+  const end = bytes.findIndex((byte, index) => byte === 13 && bytes[index + 1] === 10);
+  requireThat(end > 0 && end <= 2048, "SCOPE_MISMATCH");
+  const line = bytes.subarray(0, end);
+  requireThat(line.every(byte => byte >= 32 && byte <= 126), "SCOPE_MISMATCH");
+  return new TextDecoder().decode(line);
+}
+
 // Only call after the exact-byte event has been authenticated to our verifier and
 // bound to the server-owned attempt/schema. No labels or client metadata are used.
-export function evaluateVerifiedExchange(schema: VerificationSchema, exchange: VerifiedExchange, recipient: string): EvidenceFacts {
+export function evaluateVerifiedExchange(schema: VerificationSchema, exchange: VerifiedExchange, recipient: string, responseDisclosure: ResponseDisclosureMode = "selective"): EvidenceFacts {
   requireThat(exchange.mode === "Proxy" && exchange.serverName === new URL(schema.request.origin).hostname, "SCOPE_MISMATCH");
+  let pathParams: Readonly<Record<string, string>>;
   // A cookie is always a credential, so a cookie schema always takes the redacted path.
   if (schema.capture.cookies.length > 0 || schema.capture.headers.some(header => header.secret)) {
     inspectDisclosedRequest(schema, exchange.sent);
+    // The inspector proved the start line is public and matches the declared template;
+    // this reads the parameter values back out of it through that same matcher.
+    const match = /^([A-Z]+) (\S+) HTTP\/1\.1$/.exec(provenStartLine(exchange.sent.bytes));
+    requireThat(match && match[1] === schema.request.method, "SCOPE_MISMATCH");
+    pathParams = matchRequestTarget(schema, match![2]!);
   } else {
     requireCompleteCoverage(exchange.sent, schema.limits.maxSentBytes);
-    validateRequest(schema, parseHttp(exchange.sent.bytes, schema, "sent"));
+    pathParams = validateRequest(schema, parseHttp(exchange.sent.bytes, schema, "sent"));
   }
-  return factsFromResponse(schema, inspectDisclosedResponse(schema, exchange.recv), recipient);
+  return factsFromResponse(schema, inspectDisclosedResponse(schema, exchange.recv, responseDisclosure), recipient, pathParams);
 }

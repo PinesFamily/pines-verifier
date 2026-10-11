@@ -1,4 +1,5 @@
 import { requireThat, reject } from "./errors.ts";
+import { gunzip } from "./gzip.ts";
 import type { VerificationSchema } from "./types.ts";
 
 export type Header = Readonly<{ name: string; value: string; valueStart: number; valueEnd: number }>;
@@ -20,7 +21,7 @@ function indexOf(bytes: Uint8Array, pattern: readonly number[], from = 0): numbe
   }
   return -1;
 }
-function chunkedBody(bytes: Uint8Array, limit: number): Uint8Array {
+function chunkedBody(bytes: Uint8Array, limit: number, maxChunks: number): Uint8Array {
   let offset = 0;
   let size = 0;
   const chunks: Uint8Array[] = [];
@@ -36,7 +37,7 @@ function chunkedBody(bytes: Uint8Array, limit: number): Uint8Array {
       requireThat(offset + 2 === bytes.length && bytes[offset] === 13 && bytes[offset + 1] === 10, "INVALID_HTTP");
       break;
     }
-    requireThat(size + length <= limit && chunks.length < 4096, "LIMIT_EXCEEDED");
+    requireThat(size + length <= limit && chunks.length < maxChunks, "LIMIT_EXCEEDED");
     requireThat(offset + length + 2 <= bytes.length && bytes[offset + length] === 13 && bytes[offset + length + 1] === 10, "INVALID_HTTP");
     chunks.push(bytes.subarray(offset, offset + length));
     size += length; offset += length + 2;
@@ -79,10 +80,33 @@ export function parseHttp(bytes: Uint8Array, schema: VerificationSchema, directi
   requireThat(!(length !== undefined && coding !== undefined), "INVALID_HTTP");
   if (coding !== undefined) {
     requireThat(direction === "recv" && coding.toLowerCase() === "chunked", "INVALID_HTTP");
-    message.body = chunkedBody(message.body, schema.limits.maxBodyBytes);
+    message.body = chunkedBody(message.body, schema.limits.maxBodyBytes, schema.limits.maxChunks ?? 4096);
   } else if (length !== undefined) {
     requireThat(/^(?:0|[1-9]\d*)$/.test(length) && Number.isSafeInteger(Number(length)) && Number(length) === message.body.length, "INVALID_HTTP");
   } else requireThat(direction === "sent" && message.body.length === 0, "INVALID_HTTP");
+  // maxBodyBytes bounds the de-chunked WIRE body, so it bounds the encoded one.
   requireThat(message.body.length <= schema.limits.maxBodyBytes, "LIMIT_EXCEEDED");
+  // The single decode point. Every caller — the browser's previewExchange and
+  // planDisclosure, the enclave's inspectDisclosedResponse and inspectProviderShape —
+  // reaches the body through parseHttp, so the body is decoded exactly once per parse
+  // and no caller can forget to do it. The encoded bytes are already bounded above.
+  message.body = decodedBody(message, schema, direction);
   return message;
+}
+
+function decodedBody(message: HttpMessage, schema: VerificationSchema, direction: "sent" | "recv"): Uint8Array {
+  const privacy = schema.response.privacy;
+  // A schema without a privacy block decodes nothing and is left exactly as it was:
+  // the response validator still refuses every coding but identity, with its own code.
+  // The request direction carries accept-encoding, never a content coding.
+  if (!privacy || direction !== "recv") return message.body;
+  // An absent content-encoding is identity, and must still be one the schema admits:
+  // a gzip-only schema refuses an identity reply here rather than after parsing.
+  const coding = headerValue(message, "content-encoding")?.toLowerCase() ?? "identity";
+  requireThat((privacy.encodings as readonly string[]).includes(coding), "RESPONSE_ENCODING_UNSUPPORTED");
+  // Never br or zstd: claude.ai's brotli is larger than its gzip, and an unmeasured
+  // coding has no bounded decoder here.
+  if (coding === "identity") return message.body;
+  requireThat(coding === "gzip", "RESPONSE_ENCODING_UNSUPPORTED");
+  return gunzip(message.body, schema.limits.maxDecodedBodyBytes!);
 }
