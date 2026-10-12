@@ -17,8 +17,10 @@ controls them, and what is not yet true. It is the site's `/transparency` page w
 
 Evidence you can fetch without a password:
 
-- `https://id.pines.family/verification-config` — the live verification policy: the enclave's measured context
-  (`deploymentHash`) and the three schema digests the API accepts.
+- `https://id.pines.family/verification-config` — the live verification policy: the enclave's measured application and chain,
+  the three schema digests the API accepts, and the identity's current contract artifact hash (`deploymentHash`).
+  The identity signs that deployment into each ticket; each enclave receipt commits to its ticket. Contract redeploys
+  change the identity and web, while the image and extension remain the same. Saved verifications carry over by default.
 - `https://id.pines.family/tee/health` — whether the enclave is ready, the context it was measured for and when the
   API last checked a fresh attestation from it.
 - This repository — the image's source and the script that rebuilds it (below), the provider schemas
@@ -73,13 +75,13 @@ build metadata into the file that PCRs do not cover. Compare PCRs, which is also
 
 | | |
 |---|---|
-| Source commit | `c68f36562a72290f218eda609e4707d2e4bbd01b` (build epoch `1791717379`) |
-| Enclave PCR0 | `af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0` |
+| Source commit | `0bdad97efb70fad68456d027fab36bacce26fee9` (build epoch `1791797202`) |
+| Enclave PCR0 | `1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4` |
 | Enclave PCR1 | `4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493` |
-| Enclave PCR2 | `edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5` |
+| Enclave PCR2 | `1b38ddf5ed6fed44572e5187608a5c32bdb59c536c61adbb2e13450a149fa4a0b0c0af63425621845c98e96fee05f427` |
 | Attestation validator | `pines_nitro_validation_bg.wasm` SHA-256 `dad876167a51019dcb81495552a48ca20da285487d3a9c2ead43aff288b224bf` |
 
-Release 2026-10-11: Pines Verifier 1.14.0 (package SHA-256 77418d9d93095979952cdf120eff51b8054ca306bd9dd2240843277387923298) moves the enclave's audience to Base (chain 8453, revision tee-v3-20261012) on the same host and identity key. Only hardware/context.mjs and protocol.mjs differ from the 1.13.14 enclave's source; the four executables are byte-identical to it. Two clean builds of the exported enclave source reproduce these PCRs and the four executables.
+Live 2026-10-12: the v5 image serves Pines on Base (chain 8453, revision tee-v5-20261012, trust policy version 3). The identity signs the contract deployment into each ticket; measured code validates its format, and every receipt commits to that ticket. The image no longer fixes a contract deployment. Two sealed files differ from the 1.15.0 enclave (hardware/context.mjs and protocol.mjs); all four executables are byte-identical. Two clean builds and two exported-source rebuilds reproduce these PCRs. Fresh Nitro quotes pass for all three providers and the public identity serves the new revision. Signed-in provider proof and live-claim acceptance for this image are still pending.
 
 ## TLSNotary and the vendored crates
 

@@ -4,11 +4,6 @@ import hashlib, json, shutil, sys, subprocess, os, re
 
 here = Path(__file__).resolve().parent
 repo = here.parents[1]
-artifact = repo / 'contracts/deployments/production.json'
-expected_deployment = 'bd755354bbcf69b5832af648114c079c8784b899d38d723e55547541bbe2a8ae'
-assert hashlib.sha256(artifact.read_bytes()).hexdigest() == expected_deployment, 'RELEASE_ARTIFACT_DRIFT'
-context_source = (here / 'hardware/context.mjs').read_text()
-assert expected_deployment in context_source, 'MEASURED_CONTEXT_DRIFT'
 # Runtime inputs only, selected from tracked source rather than ignored runtime/key directories.
 # The verifier binary is the tee-hardware example, the two modules it includes and the vendored
 # TLSNotary crates its Cargo [patch] names (their tests excluded); the schema package contributes
@@ -81,7 +76,7 @@ if 'keyedIdentity' in public:
 config_path.write_text(json.dumps(image_config,sort_keys=True)+'\n')
 os.utime(config_path,(epoch,epoch))
 manifest[str(config_path.relative_to(destination))]=hashlib.sha256(config_path.read_bytes()).hexdigest()
-(destination / 'context-manifest.json').write_text(json.dumps({'status': 'hardware-unqualified', 'deploymentHash':expected_deployment, 'sourceEpoch':epoch,'sourceCommit':subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD']).decode().strip(),'sourceDirty':bool(subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip()),'files': manifest}, indent=2) + '\n')
+(destination / 'context-manifest.json').write_text(json.dumps({'status': 'hardware-unqualified', 'sourceEpoch':epoch,'sourceCommit':subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD']).decode().strip(),'sourceDirty':bool(subprocess.check_output(['git','-C',str(repo),'status','--porcelain']).strip()),'files': manifest}, indent=2) + '\n')
 for directory in sorted((p for p in destination.rglob('*') if p.is_dir()),reverse=True):
     os.chmod(directory,0o755);os.utime(directory,(epoch,epoch))
 print(destination)

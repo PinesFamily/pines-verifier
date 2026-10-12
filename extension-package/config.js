@@ -10,7 +10,7 @@ export default {
     "http://127.0.0.1:5180"
   ],
   "verifierOrigin": "https://id.pines.family",
-  "verifierRevision": "tee-v3-20261012",
+  "verifierRevision": "tee-v5-20261012",
   "verifierPolicy": {
     "host": "*.verifier.pines.family",
     "legacy": [
@@ -34,11 +34,10 @@ export default {
       "context": {
         "application": "pines",
         "chain": 8453,
-        "revision": "tee-v3-20261012",
-        "verificationEpoch": "pines-tee-v3-20261012",
+        "revision": "tee-v5-20261012",
+        "verificationEpoch": "pines-tee-v5-20261012",
         "protocolVersion": "pines-tee-native-v2",
-        "trustPolicyVersion": 2,
-        "deploymentHash": "bd755354bbcf69b5832af648114c079c8784b899d38d723e55547541bbe2a8ae"
+        "trustPolicyVersion": 3
       },
       "providers": [
         {
@@ -48,7 +47,7 @@ export default {
             "version": 6,
             "digest": "sha256:cd5e6039d98ecc181ca5f965515cf6eaa5a8dbc621ecd7673c492143f5fe223d"
           },
-          "inventorySha256": "fb2721f509ef1f443f36c61ced775b57ac5120f8f14cb94988ce1580224e4cd1",
+          "inventorySha256": "5dd28d13b4ccf2547482513fa16733e125e1672834a2065f08fd466fc67886fa",
           "policy": {
             "profile": "pines.chatgpt.tee.native.nitro.v1",
             "admissionEnabled": true,
@@ -56,13 +55,13 @@ export default {
             "clockQualified": true,
             "lifecycleQualified": true,
             "measurements": [
-              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
+              "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4"
             ],
             "pcrTuples": [
               [
-                "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
+                "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4",
                 "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-                "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
+                "1b38ddf5ed6fed44572e5187608a5c32bdb59c536c61adbb2e13450a149fa4a0b0c0af63425621845c98e96fee05f427"
               ]
             ],
             "simulationAllowed": false,
@@ -86,8 +85,8 @@ export default {
               "maxRevealedSentBytes": 1024,
               "protocolBytesPerDirection": 67108864
             },
-            "verificationEpoch": "pines-tee-v3-20261012",
-            "trustPolicyVersion": 2,
+            "verificationEpoch": "pines-tee-v5-20261012",
+            "trustPolicyVersion": 3,
             "revokedBootIds": [],
             "revokedWorkerIds": [],
             "revokedMeasurements": [],
@@ -108,7 +107,7 @@ export default {
             "version": 3,
             "digest": "sha256:b8209443cbf6aa759e9bef8b808de111e0de7837773612facb7387f4726738e2"
           },
-          "inventorySha256": "dc51595cdd3ef5f51162eab250d9dc26a667ab7e24f15eee31c5cdc464163d73",
+          "inventorySha256": "d855bdb5dc2d87a9105f47308516eb4ba64593411c120f139c366aa4908330b1",
           "policy": {
             "profile": "pines.claude.tee.native.nitro.v1",
             "admissionEnabled": true,
@@ -116,13 +115,13 @@ export default {
             "clockQualified": true,
             "lifecycleQualified": true,
             "measurements": [
-              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
+              "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4"
             ],
             "pcrTuples": [
               [
-                "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
+                "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4",
                 "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-                "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
+                "1b38ddf5ed6fed44572e5187608a5c32bdb59c536c61adbb2e13450a149fa4a0b0c0af63425621845c98e96fee05f427"
               ]
             ],
             "simulationAllowed": false,
@@ -146,8 +145,8 @@ export default {
               "maxRevealedSentBytes": 1024,
               "protocolBytesPerDirection": 67108864
             },
-            "verificationEpoch": "pines-tee-v3-20261012",
-            "trustPolicyVersion": 2,
+            "verificationEpoch": "pines-tee-v5-20261012",
+            "trustPolicyVersion": 3,
             "revokedBootIds": [],
             "revokedWorkerIds": [],
             "revokedMeasurements": [],
@@ -168,7 +167,7 @@ export default {
             "version": 3,
             "digest": "sha256:72127c492d778072c103b374177cc6d71f60e0a49ccac7aa1b23fb6da80aff75"
           },
-          "inventorySha256": "c5667ecb59bf22c60fe4cea19f3081102d68682fe682e2b44defbb1ca6c1ceca",
+          "inventorySha256": "9a7978653b2af053b58ff39234d49a2e8317bb8d789e85e71094f4b1f6d5c591",
           "policy": {
             "profile": "pines.grok.tee.native.nitro.v1",
             "admissionEnabled": true,
@@ -176,13 +175,13 @@ export default {
             "clockQualified": true,
             "lifecycleQualified": true,
             "measurements": [
-              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
+              "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4"
             ],
             "pcrTuples": [
               [
-                "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
+                "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4",
                 "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-                "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
+                "1b38ddf5ed6fed44572e5187608a5c32bdb59c536c61adbb2e13450a149fa4a0b0c0af63425621845c98e96fee05f427"
               ]
             ],
             "simulationAllowed": false,
@@ -206,8 +205,8 @@ export default {
               "maxRevealedSentBytes": 1024,
               "protocolBytesPerDirection": 67108864
             },
-            "verificationEpoch": "pines-tee-v3-20261012",
-            "trustPolicyVersion": 2,
+            "verificationEpoch": "pines-tee-v5-20261012",
+            "trustPolicyVersion": 3,
             "revokedBootIds": [],
             "revokedWorkerIds": [],
             "revokedMeasurements": [],
@@ -360,13 +359,13 @@ export default {
           "clockQualified": true,
           "lifecycleQualified": true,
           "measurements": [
-            "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
+            "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4"
           ],
           "pcrTuples": [
             [
-              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
+              "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4",
               "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-              "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
+              "1b38ddf5ed6fed44572e5187608a5c32bdb59c536c61adbb2e13450a149fa4a0b0c0af63425621845c98e96fee05f427"
             ]
           ],
           "simulationAllowed": false,
@@ -390,8 +389,8 @@ export default {
             "maxRevealedSentBytes": 1024,
             "protocolBytesPerDirection": 67108864
           },
-          "verificationEpoch": "pines-tee-v3-20261012",
-          "trustPolicyVersion": 2,
+          "verificationEpoch": "pines-tee-v5-20261012",
+          "trustPolicyVersion": 3,
           "revokedBootIds": [],
           "revokedWorkerIds": [],
           "revokedMeasurements": [],
@@ -552,13 +551,13 @@ export default {
           "clockQualified": true,
           "lifecycleQualified": true,
           "measurements": [
-            "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
+            "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4"
           ],
           "pcrTuples": [
             [
-              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
+              "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4",
               "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-              "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
+              "1b38ddf5ed6fed44572e5187608a5c32bdb59c536c61adbb2e13450a149fa4a0b0c0af63425621845c98e96fee05f427"
             ]
           ],
           "simulationAllowed": false,
@@ -582,8 +581,8 @@ export default {
             "maxRevealedSentBytes": 1024,
             "protocolBytesPerDirection": 67108864
           },
-          "verificationEpoch": "pines-tee-v3-20261012",
-          "trustPolicyVersion": 2,
+          "verificationEpoch": "pines-tee-v5-20261012",
+          "trustPolicyVersion": 3,
           "revokedBootIds": [],
           "revokedWorkerIds": [],
           "revokedMeasurements": [],
@@ -744,13 +743,13 @@ export default {
           "clockQualified": true,
           "lifecycleQualified": true,
           "measurements": [
-            "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0"
+            "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4"
           ],
           "pcrTuples": [
             [
-              "af81286ea8a9ad0f83f0976f787a2686d7b0f9dab74796da05b57eea81a7a02b9ce74467a07a41ec62a81bcd3ed804a0",
+              "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4",
               "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-              "edb35a1be26e167c2f7aaf145e3210033d7d2b88a8cf28a5c36a2f28a82fab0cb111c9cdc8abb905d40cc87f7417e3b5"
+              "1b38ddf5ed6fed44572e5187608a5c32bdb59c536c61adbb2e13450a149fa4a0b0c0af63425621845c98e96fee05f427"
             ]
           ],
           "simulationAllowed": false,
@@ -774,8 +773,8 @@ export default {
             "maxRevealedSentBytes": 1024,
             "protocolBytesPerDirection": 67108864
           },
-          "verificationEpoch": "pines-tee-v3-20261012",
-          "trustPolicyVersion": 2,
+          "verificationEpoch": "pines-tee-v5-20261012",
+          "trustPolicyVersion": 3,
           "revokedBootIds": [],
           "revokedWorkerIds": [],
           "revokedMeasurements": [],
@@ -794,11 +793,10 @@ export default {
     "capability": {
       "application": "pines",
       "chain": 8453,
-      "revision": "tee-v3-20261012",
-      "verificationEpoch": "pines-tee-v3-20261012",
+      "revision": "tee-v5-20261012",
+      "verificationEpoch": "pines-tee-v5-20261012",
       "protocolVersion": "pines-tee-native-v2",
-      "trustPolicyVersion": 2,
-      "deploymentHash": "bd755354bbcf69b5832af648114c079c8784b899d38d723e55547541bbe2a8ae",
+      "trustPolicyVersion": 3,
       "protocol": "pines-tee-native-v2",
       "capabilityVersion": 2,
       "claimSigningAvailable": false,

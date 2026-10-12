@@ -91,7 +91,6 @@ if (teePublic) {
   const {providersFor, hardwareCapability} = await import('../../tools/tee-native/profile.mjs');
   const {policyForSchema} = await import('../../tools/tee-native/policy.mjs');
   const {CONTEXT} = await import('../../tools/tee-native/hardware/context.mjs');
-  if (createHash('sha256').update(await readFile(join(root, 'contracts/deployments/production.json'))).digest('hex') !== CONTEXT.deploymentHash) throw Error('TEE_DEPLOYMENT_ARTIFACT_DRIFT');
   const policySet = qualification ? qualification.policy : teeFixture ? teePublic.policy
     : JSON.parse(await readFile(join(root, publicPrivateHeaders ? privateHeadersRelease.policyFile : 'tools/tee-native/hardware/policy.json'), 'utf8'));
   if (teeFixture && (!teeFixture.origin || origins.length !== 1 || origins[0] !== teeFixture.origin || !['http://localhost:5262'].includes(teeFixture.origin))) throw Error('TEE_FIXTURE_ORIGIN_REFUSED');

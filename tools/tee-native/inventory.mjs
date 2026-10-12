@@ -2,31 +2,48 @@ import {check, exact} from './wire.mjs';
 import {parseJson} from '../../packages/verification-schemas/src/json.ts';
 import {headerValue, utf8} from '../../packages/verification-schemas/src/http.ts';
 
-// Declarative, measured inventory. Unknown keys/headers refuse BEFORE reveal.
-// Describing a field locally does not authorize disclosing it to the enclave.
-function shape(value, spec, depth = 0) {
-  check(spec && depth <= 32, 'UNQUALIFIED_FIELD');
-  if (value === null) {check(spec.nullable === true, 'UNQUALIFIED_FIELD'); return;}
-  if (spec.type === 'object') {
-    check(typeof value === 'object' && !Array.isArray(value), 'UNQUALIFIED_FIELD');
-    for (const key of Object.keys(value)) {
-      check(Object.hasOwn(spec.properties, key), 'UNQUALIFIED_FIELD');
-      shape(value[key], spec.properties[key], depth + 1);
-    }
-    for (const key of spec.required ?? []) check(Object.hasOwn(value, key), 'UNQUALIFIED_FIELD');
-  } else if (spec.type === 'array') {
-    check(Array.isArray(value) && value.length <= spec.maxItems, 'UNQUALIFIED_FIELD');
-    for (const item of value) shape(item, spec.items, depth + 1);
-  } else {
-    check(['string', 'number', 'boolean'].includes(spec.type) && typeof value === spec.type, 'UNQUALIFIED_FIELD');
-    if (typeof value === 'string') check(new TextEncoder().encode(value).length <= spec.maxBytes, 'UNQUALIFIED_FIELD');
-    if (typeof value === 'number') check(Number.isFinite(value), 'UNQUALIFIED_FIELD');
+// Measured inventory: the response header names each provider may send. Unknown header names and
+// credentials in the body refuse BEFORE reveal.
+//
+// The body is no longer held to an observed per-field shape. That refused every account whose provider
+// added a field or filled a null one, while the fields a decision reads are judged by the schema's
+// selector and checks regardless. What still refuses is a credential anywhere in the body: a non-empty
+// string under a credential-named key, or a string in a known credential format. Size and depth stay
+// bounded by the schema and `parseJson`.
+const CREDENTIAL_NOUNS = new Set(['token', 'tokens', 'secret', 'secrets', 'password', 'passwords', 'passwd', 'passphrase',
+  'cookie', 'cookies', 'credential', 'credentials', 'authorization', 'apikey', 'accesstoken', 'refreshtoken', 'idtoken',
+  'authtoken', 'sessionkey', 'sessionid', 'sessiontoken', 'privatekey', 'secretkey', 'accesskey']);
+const CREDENTIAL_PAIRS = new Set(['api key', 'session key', 'session id', 'private key', 'secret key', 'access key', 'signing key']);
+// Grok's session cookies by name. No `jwt`, `bearer` or `sso` noun: Grok's observed
+// `surfaceNames.SURFACE_JWT` is a display name, and those credentials are caught by format.
+const CREDENTIAL_KEYS = new Set(['sso', 'sso-rw']);
+// The providers' credentials as presented: ChatGPT's bearer and session token and Grok's `sso` (JWT or
+// JWE), claude.ai's `sessionKey` and Anthropic's keys, OpenAI and xAI API keys, and any Bearer value.
+const CREDENTIAL_FORMATS = [/eyJ[\w-]{10,}\.[\w-]*\.[\w-]{10,}/, /\bsk-ant-[a-z]+\d*-/, /\bsk-(?:proj|svcacct|admin)-[\w-]{20,}/,
+  /\bxai-[A-Za-z0-9]{40,}/, /\bbearer\s+[\w.~+\/=-]{16,}/i];
+// A key names a credential when its last word does (`access_token`, `sessionKey`, `client_secret`), never
+// for a word elsewhere in it (`api_key_creation_enabled`, `account_session_duration_seconds`).
+const words = key => key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+  .toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+export function credentialName(key) {
+  if (CREDENTIAL_KEYS.has(key.toLowerCase())) return true;
+  const named = words(key);
+  return named.length > 0 && (CREDENTIAL_NOUNS.has(named.at(-1)) || CREDENTIAL_PAIRS.has(named.slice(-2).join(' ')));
+}
+const credentialFormat = text => CREDENTIAL_FORMATS.some(format => format.test(text));
+// Everything under a credential-named key is the credential's, through arrays and objects alike.
+function refuseCredentials(value, credentialKey = false) {
+  if (typeof value === 'string') check(!credentialFormat(value) && !(credentialKey && value.length > 0), 'UNQUALIFIED_FIELD');
+  else if (Array.isArray(value)) for (const item of value) refuseCredentials(item, credentialKey);
+  else if (value !== null && typeof value === 'object') for (const [key, child] of Object.entries(value)) {
+    check(!credentialFormat(key), 'UNQUALIFIED_FIELD');
+    refuseCredentials(child, credentialKey || credentialName(key));
   }
 }
 // `responseDisclosure` is the selected policy's mode, never a local choice.
 export function inspectProviderShape(message, inventory, responseDisclosure = 'selective') {
   check(['selective', 'complete', 'private-headers'].includes(responseDisclosure), 'DISCLOSURE_POLICY');
-  check(inventory?.qualified === true && inventory.version === 1, 'PROVIDER_INVENTORY_UNQUALIFIED');
+  check(inventory?.qualified === true && inventory.version === 2, 'PROVIDER_INVENTORY_UNQUALIFIED');
   check(message.startLine === 'HTTP/1.1 200 OK', 'RESPONSE_STATUS');
   check(['application/json', 'application/json; charset=utf-8', 'application/json;charset=utf-8']
     .includes(headerValue(message, 'content-type')?.toLowerCase()), 'CONTENT_TYPE');
@@ -40,7 +57,7 @@ export function inspectProviderShape(message, inventory, responseDisclosure = 's
   // Under private headers the values are hidden but the NAMES are public, so the
   // allowlist still refuses an unknown header.
   if (responseDisclosure !== 'complete') for (const h of message.headers) check(inventory.responseHeaders.includes(h.name), 'UNQUALIFIED_HEADER');
-  const root = parseJson(utf8(message.body), 32); shape(root, inventory.body);
+  const root = parseJson(utf8(message.body), 32); refuseCredentials(root);
   return root;
 }
 export function inspectProvider(message, inventory) {

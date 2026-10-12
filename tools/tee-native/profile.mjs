@@ -19,7 +19,7 @@ import {parseHttp, headerValue, utf8} from '../../packages/verification-schemas/
 import {parseJson} from '../../packages/verification-schemas/src/json.ts';
 import {inspectDisclosedRequest} from '../../packages/verification-schemas/src/redacted-request.ts';
 import {inspectDisclosedResponse} from '../../packages/verification-schemas/src/redacted-response.ts';
-import {evaluateVerifiedExchange} from '../../packages/verification-schemas/src/evaluate.ts';
+import {evaluateVerifiedExchange, claudePaidPlan} from '../../packages/verification-schemas/src/evaluate.ts';
 import {check, digest, lp, encode} from './wire.mjs';
 import {inspectProvider, inspectProviderShape} from './inventory.mjs';
 import {disclosurePolicy, checkDisclosureRanges, REDACTED_RESPONSE, PRIVATE_HEADERS} from './disclosure-policy.mjs';
@@ -172,7 +172,11 @@ export const hardwareCapability = selectedPolicy => {
 
 // Full provider JSON is authenticated only inside the measured evaluator. The
 // browser sees it locally, but the only public consent/receipt fact is a closed plan.
-const privateFacts = (provider, facts) => ({id: facts.subjectKey, plan: normalizePlan(provider, facts.values[provider.planField])});
+// Claude's plan is what its capabilities and tier agree on: Pro shares Free's tier, so the tier
+// alone cannot name it. Every other provider's plan is its plan field.
+const claudePlan = values => {const plan = claudePaidPlan(values); check(plan !== null, 'INELIGIBLE_PLAN'); return plan;};
+const privateFacts = (provider, facts) => ({id: facts.subjectKey,
+  plan: provider.id === 'claude' ? claudePlan(facts.values) : normalizePlan(provider, facts.values[provider.planField])});
 export function planDisclosureForProvider(provider, sent, recv, wallet, selectedPolicy = REDACTED_RESPONSE) {
   const policy = disclosurePolicy(selectedPolicy);
   // A provider belongs to exactly one policy's set. There is no fallback between them:

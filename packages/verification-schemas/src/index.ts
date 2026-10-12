@@ -5,7 +5,7 @@ export { parseSchema, requestUrl, requestTarget, schemaDigest, matchRequestTarge
 export { loadRegistry, createRegistry } from "./registry.ts";
 export { prepareReplay, capturedFrom } from "./capture.ts";
 export type { ReplayOptions } from "./capture.ts";
-export { previewExchange, evaluateVerifiedExchange, deriveSubjectKey, rankClaudePersonalOrgs, isClaudePaidPersonalOrg } from "./evaluate.ts";
+export { previewExchange, evaluateVerifiedExchange, deriveSubjectKey, rankClaudePersonalOrgs, isClaudePaidPersonalOrg, claudePaidPlan } from "./evaluate.ts";
 export { gunzip, crc32, MAX_DECODED_RATIO } from "./gzip.ts";
 export { planDisclosure } from "./disclosure.ts";
 export { inspectDisclosedRequest } from "./redacted-request.ts";

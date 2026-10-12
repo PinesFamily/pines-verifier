@@ -17,21 +17,23 @@ export const TLSN_EXTENSION_ID = 'lanmbpkmblcijblbllbikenpnceidmpj';
 const protocol = 'pines-tlsn-bridge-v1';
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const revisionPattern = /^[a-zA-Z0-9._-]{1,80}$/;
-// Schema versions whose receipts may be claimable once the API enables claims.
-const claimableSchemas = ['pines.chatgpt.plan@2', 'pines.chatgpt.plan@3', 'pines.claude.plan@1', 'pines.grok.plan@1', 'pines.chatgpt.tee.native@3', 'pines.chatgpt.tee.native@4', 'pines.claude.tee.native@1', 'pines.grok.tee.native@1'];
+// Ordinary-proof schema versions whose receipts may be claimable once the API enables claims. A TEE configuration names
+// its own claimable schemas (`claimableSchema` below): a fixed list here fell behind every native schema bump (chatgpt
+// @6, claude @3, grok @3 on 2026-10-12) and turned each fresh verified receipt into RECEIPT_CONTEXT_MISMATCH.
+const claimableSchemas = ['pines.chatgpt.plan@2', 'pines.chatgpt.plan@3', 'pines.claude.plan@1', 'pines.grok.plan@1'];
 const providerIds = Object.freeze({chatgpt: 'CHATGPT-SUBSCRIPTION', claude: 'CLAUDE-PLAN', grok: 'GROK-PLAN'});
 const hasKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 const referenceKeys = ['schemaId', 'version', 'digest'];
 const sameSchema = (a, b) => a && b && referenceKeys.every(key => a[key] === b[key]);
 const exactSchema = (a, b) => hasKeys(a, referenceKeys) && hasKeys(b, referenceKeys) && sameSchema(a, b);
-const teeKeys = ['capabilityVersion', 'application', 'chain', 'revision', 'verificationEpoch', 'protocolVersion', 'trustPolicyVersion', 'deploymentHash', 'protocol', 'providers', 'claimSigningAvailable'];
+const teeKeys = ['capabilityVersion', 'application', 'chain', 'revision', 'verificationEpoch', 'protocolVersion', 'trustPolicyVersion', 'protocol', 'providers', 'claimSigningAvailable'];
 const providerKeys = ['id', 'profile', 'schema', 'savedSchemas'];
 /** Discovery may vary admission and signer availability; it cannot vary a measured provider binding. */
 export const sameTeeCapability = (a, b) => Boolean(hasKeys(a, teeKeys) && hasKeys(b, teeKeys)
   && a.capabilityVersion === 2 && b.capabilityVersion === 2
   && typeof a.claimSigningAvailable === 'boolean' && typeof b.claimSigningAvailable === 'boolean'
-  && ['application', 'chain', 'revision', 'verificationEpoch', 'protocolVersion', 'trustPolicyVersion', 'deploymentHash', 'protocol'].every(key => a[key] === b[key])
+  && ['application', 'chain', 'revision', 'verificationEpoch', 'protocolVersion', 'trustPolicyVersion', 'protocol'].every(key => a[key] === b[key])
   && Array.isArray(a.providers) && Array.isArray(b.providers) && a.providers.length === b.providers.length
   && a.providers.every((row, index) => {const other = b.providers[index]; return hasKeys(row, providerKeys) && hasKeys(other, providerKeys)
     && row.id === other.id && row.profile === other.profile && exactSchema(row.schema, other.schema)
@@ -111,8 +113,10 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
     return response.json();
   };
   const assignedRouting = value => configuration?.attemptRouting?.includes?.('assigned') === true && Array.isArray(value?.routing) && value.routing.includes('assigned');
+  const claimableSchema = schema => configuration?.tee ? Boolean(teeProviderFor(configuration.tee, schema, true))
+    : claimableSchemas.includes(`${schema?.schemaId}@${schema?.version}`);
   const checkStatus = (handle, value) => {
-    if (value.attemptId !== handle.attempt.attemptId || value.recipient !== handle.recipient || value.mode !== 'Proxy' || typeof value.claimable !== 'boolean' || (value.claimable && (!configuration?.claimable || !claimableSchemas.includes(`${value.schema?.schemaId}@${value.schema?.version}`) || value.status !== 'verified')) || !sameSchema(value.schema, handle.attempt.schema)) throw Error('RECEIPT_CONTEXT_MISMATCH');
+    if (value.attemptId !== handle.attempt.attemptId || value.recipient !== handle.recipient || value.mode !== 'Proxy' || typeof value.claimable !== 'boolean' || (value.claimable && (!configuration?.claimable || !claimableSchema(value.schema) || value.status !== 'verified')) || !sameSchema(value.schema, handle.attempt.schema)) throw Error('RECEIPT_CONTEXT_MISMATCH');
     // The API decides which verifier served an attempt. A pinned attempt must match discovery; an assigned one its
     // assignment; a restored reference (no assignment kept) any well-formed revision the API reports.
     const expectedRevision = handle.attempt.verifier?.revision ?? (handle.attempt.routing === 'pinned' ? configuration?.verifierRevision : undefined);
@@ -249,6 +253,8 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
       }
     },
     extensionStatus: handle => handle.runId ? message('verification-status', {runId: handle.runId, recipient: handle.recipient}) : Promise.resolve(null),
+    /** The page found this run's result saved by another route than `waitForReceipt`: tell the panel, as that does. */
+    acknowledgeReceipt: async handle => { if (handle.runId) await message('receipt-verified', {runId: handle.runId, recipient: handle.recipient}); },
     receiptStatus: async handle => checkStatus(handle, await api(`/verification-attempts/${handle.attempt.attemptId}`)),
     /** Explicit user cancellation: record the cancel request, then stop the extension run (a revealed run is spared). */
     async cancel(handle) {

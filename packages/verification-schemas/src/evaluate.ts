@@ -56,6 +56,11 @@ export function deriveSubjectKey(schema: VerificationSchema, value: Json, recipi
 //
 const CLAUDE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const CLAUDE_TIER = /^default_claude_(max|pro)(?:_[a-z0-9]+){0,4}$/;
+// Claude serves Pro on Free's tier: a real Pro org (2026-10-11) answered `["chat","claude_pro"]` with
+// `default_claude_ai`. So for Pro the capability is the paid signal and the tier may be that shared
+// one; Max keeps its own tier (`default_claude_max_20x`, observed 2026-09-26). Free stays out because
+// it carries no paid capability, which every Claude selector requires.
+const CLAUDE_SHARED_TIER = "default_claude_ai";
 function claudePaidMarker(value: Json): "max" | "pro" | null {
   if (!Array.isArray(value) || value.length === 0 || value.length > 32) return null;
   if (!value.every(entry => typeof entry === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(entry))) return null;
@@ -63,17 +68,23 @@ function claudePaidMarker(value: Json): "max" | "pro" | null {
   const max = value.includes("claude_max"), pro = value.includes("claude_pro");
   return max === pro ? null : max ? "max" : "pro";
 }
-function claudePaidTier(value: Json): "max" | "pro" | null {
+function claudeTier(value: Json): "max" | "pro" | "shared" | null {
   if (typeof value !== "string" || value.length > 64) return null;
+  if (value === CLAUDE_SHARED_TIER) return "shared";
   const match = CLAUDE_TIER.exec(value);
   return match ? match[1] as "max" | "pro" : null;
 }
+/** The paid plan an org's `capabilities` and `rate_limit_tier` agree on, or null. Reads only those
+ *  two keys, so it takes an organization object or the schema's extracted values alike. */
+export function claudePaidPlan(value: Json): "max" | "pro" | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const marker = claudePaidMarker(value.capabilities ?? null), tier = claudeTier(value.rate_limit_tier ?? null);
+  return marker !== null && (tier === marker || (marker === "pro" && tier === "shared")) ? marker : null;
+}
 export function isClaudePaidPersonalOrg(value: Json): boolean {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const marker = claudePaidMarker(value.capabilities ?? null);
   // Personal orgs only: no Team (`raven`) type and no parent organization.
-  return marker !== null && marker === claudePaidTier(value.rate_limit_tier ?? null)
-    && value.raven_type === null && value.parent_organization_uuid === null;
+  return claudePaidPlan(value) !== null && value.raven_type === null && value.parent_organization_uuid === null;
 }
 // The same predicate the single-object selector applies, exported so a client that has
 // to choose among several qualifying personal organizations cannot disagree with the
@@ -174,7 +185,9 @@ function facts(schema: VerificationSchema, response: Json, recipient: string, pa
           case "non-empty-string-v1": passes = typeof value === "string" && value.length > 0; break;
           // Lowercase exactly as Claude serves it: never case-fold an identity into a second nullifier.
           case "claude-org-uuid-v1": passes = typeof value === "string" && CLAUDE_UUID.test(value); break;
-          case "claude-paid-tier-v1": passes = claudePaidTier(value) !== null; break;
+          // Alone, the tier may be Free's shared one: the selector has already required a paid capability
+          // that agrees with it, and `claudePaidPlan` is what names the plan.
+          case "claude-paid-tier-v1": passes = claudeTier(value) !== null; break;
           case "claude-paid-capabilities-v1": passes = claudePaidMarker(value) !== null; break;
           // Lowercase exactly as grok.com serves it (observed 2026-09-27), for the same reason.
           case "grok-user-uuid-v1": passes = typeof value === "string" && GROK_UUID.test(value); break;

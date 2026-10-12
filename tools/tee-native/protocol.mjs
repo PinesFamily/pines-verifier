@@ -40,9 +40,10 @@ export async function issueTicket(clientKey, browserNonce, key, now = Date.now()
 
 export async function issueHardwareTicket(attempt, clientKey, browserNonce, key, now = Date.now()) {
   const provider = providerForSchema(attempt.schema, attempt.disclosurePolicy); check(provider, 'SCHEMA_UNAVAILABLE');
+  check(typeof attempt.deploymentHash === 'string' && /^[a-f0-9]{64}$/.test(attempt.deploymentHash), 'DEPLOYMENT_CONTEXT');
   const timing = validateSessionPolicySnapshot(attempt, attempt.issuedAt);
   const body = {profile: provider.profile, mode: 'Proxy', attempt: attempt.attemptId, wallet: attempt.recipient,
-    ...CONTEXT, workerId: attempt.workerId, bootId: attempt.bootId, schemaDigest: await schemaDigest(provider.profile, attempt.disclosurePolicy), clientKey, browserNonce, apiNonce: random(),
+    ...CONTEXT, deploymentHash: attempt.deploymentHash, workerId: attempt.workerId, bootId: attempt.bootId, schemaDigest: await schemaDigest(provider.profile, attempt.disclosurePolicy), clientKey, browserNonce, apiNonce: random(),
     issuedAt: attempt.issuedAt, expiresAt: attempt.expiresAt, resultExpiresAt: attempt.issuedAt + TIMES.deliveryMs, limits: LIMITS, ...timing, ...parentBinding(attempt),
     // Signed exact policy object; an attempt without one keeps the legacy redacted ticket.
     ...(attempt.disclosurePolicy===undefined?{}:{disclosurePolicy:disclosurePolicy(attempt.disclosurePolicy)})};
@@ -58,7 +59,7 @@ export async function checkTicket(ticket, key, profile, now = Date.now(), {allow
   const disclosure = Object.hasOwn(t, 'disclosurePolicy');
   // Object form only: the API signs the policy object, and a bare id would widen what a signed ticket may carry (review R-PH-5).
   if (disclosure) {check(hardware && typeof t.disclosurePolicy === 'object' && t.disclosurePolicy !== null, 'DISCLOSURE_POLICY'); disclosurePolicy(t.disclosurePolicy);}
-  exact(t, ['profile', 'mode', 'attempt', 'wallet', 'application', 'chain', 'schemaDigest', 'clientKey', 'browserNonce', 'apiNonce', 'issuedAt', 'expiresAt', 'resultExpiresAt', 'limits', ...(timing ? SESSION_POLICY_FIELDS : []), ...Object.keys(parent), ...(hardware ? [...Object.keys(CONTEXT).filter(k => !['application','chain'].includes(k)), 'workerId', 'bootId'] : []), ...(disclosure ? ['disclosurePolicy'] : [])]);
+  exact(t, ['profile', 'mode', 'attempt', 'wallet', 'application', 'chain', 'schemaDigest', 'clientKey', 'browserNonce', 'apiNonce', 'issuedAt', 'expiresAt', 'resultExpiresAt', 'limits', ...(timing ? SESSION_POLICY_FIELDS : []), ...Object.keys(parent), ...(hardware ? [...Object.keys(CONTEXT).filter(k => !['application','chain'].includes(k)), 'deploymentHash', 'workerId', 'bootId'] : []), ...(disclosure ? ['disclosurePolicy'] : [])]);
   check((hardware || profile === SIMULATION) && t.profile === profile && t.mode === 'Proxy', 'PROFILE');
   check(t.application === (hardware ? CONTEXT.application : 'pines-local-nonclaimable') && t.chain === CONTEXT.chain && /^0x[0-9a-f]{40}$/.test(t.wallet), 'TICKET_SCOPE');
   if (hardware) check(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(t.attempt), 'ATTEMPT');
@@ -74,6 +75,7 @@ export async function checkTicket(ticket, key, profile, now = Date.now(), {allow
   if (timing) check(now < timing.sessionExpiresAt && timing.sessionExpiresAt <= t.resultExpiresAt, 'SESSION_DEADLINE');
   if (hardware) {
     check(Object.entries(CONTEXT).every(([k,v]) => t[k] === v), 'DEPLOYMENT_CONTEXT');
+    check(typeof t.deploymentHash === 'string' && /^[a-f0-9]{64}$/.test(t.deploymentHash), 'DEPLOYMENT_CONTEXT');
     check(typeof t.workerId === 'string' && /^[a-z0-9][a-z0-9-]{1,63}$/.test(t.workerId), 'WORKER_CONTEXT');
     unhex(t.bootId, 32);
   }

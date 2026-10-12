@@ -1,5 +1,5 @@
 export type TeeProvider = {id: 'chatgpt' | 'claude' | 'grok'; profile: string; schema: SchemaReference; savedSchemas: SchemaReference[]};
-export type TeeCapability = {capabilityVersion: 2; application: string; chain: number; revision: string; verificationEpoch: string; protocolVersion: string; trustPolicyVersion: number; deploymentHash: string; protocol: string; providers: TeeProvider[]; claimSigningAvailable: boolean};
+export type TeeCapability = {capabilityVersion: 2; application: string; chain: number; revision: string; verificationEpoch: string; protocolVersion: string; trustPolicyVersion: number; protocol: string; providers: TeeProvider[]; claimSigningAvailable: boolean};
 export function sameTeeCapability(a: unknown, b: unknown): boolean;
 export function teeProviderFor(capability: TeeCapability | undefined, reference: SchemaReference, saved?: boolean): TeeProvider | undefined;
 export type SchemaReference = {schemaId: string; version: number; digest: string};
@@ -19,6 +19,8 @@ export type TlsnConfiguration = {
   /** Present on APIs that assign a verifier per attempt. */
   attemptRouting?: AttemptRouting[];
   tee?: TeeCapability;
+  /** The identity’s signed ticket audience, checked by the web against its build artifact. */
+  deploymentHash?: string;
   sessionPolicy?: SessionPolicy;
   /** Present only when the API advertises regional direct entry. */
   teeRegionalEntry?: TeeRegionalEntry;
@@ -56,6 +58,7 @@ export function createTlsnClient(options: {
   capabilities(): Promise<{engine: 'tlsn'; mode: 'Proxy'; application: string; chainId: number; verifierRevision: string; verifierOrigin: string; schemas: SchemaReference[]; claimable: false; routingMode?: AttemptRouting; routing?: AttemptRouting[]; admissionErrorScreen?: boolean; prepareProvider?: boolean; upfrontConsent?: 2; ownerConnection?: boolean; tee?: TeeCapability; sessionPolicySupport?: SessionPolicySupport; regionalEntry?: 1}>;
   start(recipient: string, schemaId?: string, options?: {signal?: AbortSignal; onAttempt?: (handle: ReceiptHandle) => void; isCurrent?: () => boolean; onPreparation?: (state: {phase: string}) => void}): Promise<ReceiptHandle>;
   extensionStatus(handle: ReceiptHandle): Promise<ExtensionState | null>;
+  acknowledgeReceipt?(handle: ReceiptHandle): Promise<void>;
   receiptStatus(handle: ReceiptHandle): Promise<ReceiptStatus>;
   cancel(handle: ReceiptHandle): Promise<void>;
   recipientChanged(handle: ReceiptHandle, recipient: string | null): Promise<void>;
