@@ -293,17 +293,22 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
           }
           await checkCancelled();
           if (state?.status === 'verified' && uuid.test(state.receiptId)) {
-            if (configuration?.tee) {
+            // With no wallet sign-in the private records are not readable here. The status's own
+            // `claimable` is the api's check of this very receipt (durable, bound, trusted); only where claims are off
+            // does the public summary stand in for it, and it must list this provider for this wallet.
+            const quiet = configuration?.walletSignIn === 'optional';
+            if (configuration?.tee && !(quiet && state.claimable === true)) {
               const provider = teeProviderFor(configuration.tee, handle.attempt.schema, true);
               let saved;
-              try { saved = await api('/wallet-verifications?recipient=' + handle.recipient); }
+              try { saved = await api((quiet ? '/wallet-summary?recipient=' : '/wallet-verifications?recipient=') + handle.recipient); }
               catch (error) {
                 if (!error.transient && !TRANSIENT.test(error.message)) throw error;
                 failures++; nextApiAt = now() + Math.min(BACKOFF_MAX_MS, 1000 * 2 ** (failures - 1)); state = undefined;
                 await sleep(IDLE_WAIT_MS); continue;
               }
-              if (saved.protocol !== 'pines-wallet-verifications-v1' || saved.recipient !== handle.recipient || saved.application !== application || saved.chainId !== chainId || !Array.isArray(saved.verifications)
-                || !provider || !saved.verifications.some(row => row.id === state.receiptId && row.providerId === providerIds[provider.id] && row.executionProfile === provider.profile && row.verificationEpoch === configuration.tee.verificationEpoch && sameSchema(row.schema, handle.attempt.schema) && row.validUntil > now())) throw Error('RECEIPT_REVOKED');
+              if (saved.protocol !== (quiet ? 'pines-wallet-summary-v1' : 'pines-wallet-verifications-v1') || saved.recipient !== handle.recipient || saved.application !== application || saved.chainId !== chainId || !Array.isArray(saved.verifications)
+                || !provider || !saved.verifications.some(row => (quiet || row.id === state.receiptId && row.executionProfile === provider.profile && row.verificationEpoch === configuration.tee.verificationEpoch && sameSchema(row.schema, handle.attempt.schema))
+                  && row.providerId === providerIds[provider.id] && row.validUntil > now())) throw Error('RECEIPT_REVOKED');
             }
             if (handle.runId) await message('receipt-verified', {runId: handle.runId, recipient: handle.recipient}).catch(() => {});
             await checkCancelled();

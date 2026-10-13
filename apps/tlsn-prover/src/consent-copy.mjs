@@ -1,7 +1,7 @@
 // What the panel says is shared, keyed on the build's signed disclosure policy (config.tee.disclosurePolicy, which
 // tools/tee-native/client.mjs binds to every ticket). Import-free: the panel loads it unbundled.
 // The client design record (its Consent section) holds both texts; a third policy has no copy and fails closed.
-const AUTHORIZE = 'Pines receives your verified plan and an account pseudonym. Agree and verify authorizes this one verification for the wallet below.';
+const AUTHORIZE = 'Pines receives your verified plan and an account pseudonym. Verification starts automatically and covers only the wallet below.';
 const REQUEST = 'Outgoing credential header values, including Authorization and the complete Cookie value, stay hidden in the request proof.';
 const copy = Object.freeze({
   'full-response-v1': Object.freeze({

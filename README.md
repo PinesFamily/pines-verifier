@@ -32,18 +32,29 @@ How the pieces tie together: the extension refuses to disclose anything until an
 for this attempt and not in debug mode, carries exactly the PCRs in the release record below
 (`tools/tee-native/nitro.mjs`, `protocol.mjs`); rebuilding this tree yields those PCRs; so the code you read here is the
 code that reads your provider response. The extension package itself (Pines Verifier, id
-`lanmbpkmblcijblbllbikenpnceidmpj`) is installed unpacked from the site and identified by its SHA-256 in the status
-line below. It is not yet published in the Chrome Web Store: the listing under the same id carries an earlier,
-pre-enclave version that the site turns away. Its two binaries, the attestation validator and the TLSNotary prover,
-rebuild here byte for byte; the package as a whole does not yet.
+`lanmbpkmblcijblbllbikenpnceidmpj`) is published in the Chrome Web Store under that id, where the site's Install
+buttons lead, and served by the site as a ZIP for a manual install, identified by its SHA-256 in
+[extension-package/README.md](extension-package/README.md); the store listing is uploaded separately, so its version can trail the package's. Its two binaries, the
+attestation validator and the TLSNotary prover, rebuild here byte for byte; the package as a whole does not yet.
 
-**[extension-package/](extension-package)** holds the installed package's `manifest.json` (permissions, content
+**[extension-package/](extension-package)** holds the site-served ZIP package's `manifest.json` (permissions, content
 security policy, the pages allowed to call it), `config.js` (the PCRs it pins, in plain text) and `build.json`
 verbatim, with `SHA256SUMS` for every file in it, so the package can be reviewed without opening the ZIP and a
 downloaded copy can be checked file by file. `build.json` names the commits of Pines' private development repository
 the package was built and packaged from; this repository is a path-for-path export of that repository, and its
-extension sources are those commits' files. The version number is set by the release packaging, not by
-`apps/tlsn-prover/build.mjs`.
+extension sources follow the site-served ZIP's source snapshot, with the comment-only omissions described below.
+The version number is set by the release packaging, not by `apps/tlsn-prover/build.mjs`.
+
+The extension audit sources in this snapshot follow the site-served **1.17.0 ZIP** package's source commit
+`c739ebb0e7810b2585a3d2acb7f8408fdd08e41a`; its ZIP SHA-256 is
+`d73ce18752e14d66906a42679bf94758f1849bdbf928f14eac12b1e552cad846`.
+The Chrome Web Store listing is uploaded separately and can serve a different version; this source snapshot
+describes the site ZIP, not every installed Store package.
+Four internal comment attributions were removed from `client.d.mts`, `client.mjs`, `src/background.js` and
+`src/panel.js` under `apps/tlsn-prover`; executable source is unchanged by those omissions. The current world
+artifact and transparency text have their own deployment date. Every measured enclave source, policy pin and
+`tools/tee-native/reproduce/release.json` remains byte-identical to the preceding public release. The historical
+claim-signing flag in the package's `build.json` describes packaging; current policy is published by the identity API.
 
 `id.pines.family/tee/health` is the API's own report of readiness and capacity, not signed evidence. The signed
 attestation reaches the extension with each verification, in the response to `/tee/admission`
@@ -117,7 +128,7 @@ GitHub and fails on any difference; see `apps/tlsn-verifier/third_party/README.m
 | `tools/tee-native` | Attestation, channel, ticket/receipt protocol, the enclave service, the image recipe (`hardware/`), the validator (`attestation-wasm/`) and the reproduction scripts (`reproduce/`) |
 | `packages/verification-schemas` | Provider request schemas, selective-disclosure planner and the strict HTTP/JSON evaluator |
 | `apps/tlsn-prover` | The extension sources that drive a proof and check the attestation (for review) |
-| `contracts/deployments/production.json` | The chain deployment the measured context is bound to (checked by hash) |
+| `contracts/deployments/production.json` | The identity service's current chain deployment, signed into verification tickets; outside the measured image |
 
 ## Provenance and licenses
 

@@ -10,7 +10,7 @@ const labels = Object.freeze({
   chatgpt: Object.freeze({plus: 'Plus', pro: 'Pro', prolite: 'Pro Lite', promax: 'Pro Max'}),
   claude: Object.freeze({pro: 'Pro', max: 'Max'}),
   grok: Object.freeze({SUBSCRIPTION_TIER_X_PREMIUM_PLUS: 'X Premium+', SUBSCRIPTION_TIER_SUPER_GROK_LITE: 'SuperGrok Lite',
-    SUBSCRIPTION_TIER_GROK_PRO: 'SuperGrok', SUBSCRIPTION_TIER_SUPER_GROK_PLUS: 'SuperGrok Plus', SUBSCRIPTION_TIER_SUPER_GROK_PRO: 'SuperGrok Pro'}),
+    SUBSCRIPTION_TIER_GROK_PRO: 'SuperGrok', SUBSCRIPTION_TIER_SUPER_GROK_PLUS: 'SuperGrok Plus', SUBSCRIPTION_TIER_SUPER_GROK_PRO: 'SuperGrok Heavy'}),
 });
 export const nativeServiceOf = schemaId => Object.hasOwn(services, schemaId) ? services[schemaId] : null;
 export function nativePlanValues(reference) {

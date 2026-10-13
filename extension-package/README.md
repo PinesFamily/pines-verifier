@@ -1,8 +1,8 @@
-# Pines Verifier 1.16.0: the installed package as text
+# Pines Verifier 1.17.0: the installed package as text
 
-The site installs Pines Verifier 1.16.0 (extension id `lanmbpkmblcijblbllbikenpnceidmpj`) as an unpacked ZIP whose SHA-256 is
-`6e7db007959197d6fb3d51bbff0f42671fcee5818734573b11310960843e49eb`. It is not yet published in the Chrome Web Store, whose listing under the same id carries an
-earlier, pre-enclave version that the site turns away.
+The site serves Pines Verifier 1.17.0 (extension id `lanmbpkmblcijblbllbikenpnceidmpj`) as a ZIP for a manual, unpacked
+install; its SHA-256 is `d73ce18752e14d66906a42679bf94758f1849bdbf928f14eac12b1e552cad846`. The site's Install buttons lead to the Chrome Web Store listing under
+the same id, which is uploaded separately, so the store's version can trail this package's.
 
 For a reader who cannot open the ZIP, this directory holds three of its files verbatim and the SHA-256 of every file in it:
 

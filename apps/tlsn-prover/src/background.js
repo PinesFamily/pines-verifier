@@ -45,6 +45,7 @@ const capture = new ProviderCapture({browser: chrome, current: () => job, ownerR
     if (config.tee) {
       check(job?.runId === runId && job.preparing && preparation, 'STALE_RUN');
       preparation.captured(job, replay); updatePhase('awaiting-consent'); await persist();
+      void consentAutomatically(job);
     } else {const result = await offscreen({type: 'replay', runId, replay}); check(result?.ok, 'WORKER_UNAVAILABLE');}
   },
   fail: code => cancel('failed', code),
@@ -103,6 +104,21 @@ async function cancel(phase = 'cancelled', error = null, {spareRevealed = false,
   const runId = job.runId; updatePhase(phase, error); await persist();
   if ((await contexts()).length) await offscreen({type: 'cancel', runId}).catch(() => {});
   await closeOffscreen();
+}
+// Verification starts as soon as the provider response is captured, with no Agree and verify step: the Claim press on Pines that opened this run is the consent. The checks the button's
+// handler made still gate admission, and a run that fails them stops with its code.
+async function consentAutomatically(owned) {
+  try {
+    check(config.tee && job === owned && owned.preparing && owned.phase === 'awaiting-consent' && preparation, 'CONSENT_REQUIRED');
+    check(await permissionReady(owned) && await owners.live(owned.owner), 'OWNER_LEFT');
+    await capture.validate(owned);
+    await flow.focusOwnerForAdmission(owned);
+    await capture.validate(owned);
+    check(job === owned && owned.phase === 'awaiting-consent', 'STALE_RUN');
+    preparation.approve(owned); updatePhase('ready'); await persist();
+  } catch (error) {
+    if (job === owned && owned.phase === 'awaiting-consent') await cancel('failed', safeCode(error));
+  }
 }
 let panelCancellation;
 async function cancelFromPanel() {
@@ -427,14 +443,6 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       // Manual diagnostics also capture in a fresh run-owned tab.
       const entry = entryOf(await registered, owned.schema);
       await capture.start(owned, entry.schema, {});
-    } else if (message.type === 'panel-consent') {
-      check(config.tee && owned.preparing && owned.phase === 'awaiting-consent' && preparation, 'CONSENT_REQUIRED');
-      check(await permissionReady(owned) && await owners.live(owned.owner), 'OWNER_LEFT');
-      await capture.validate(owned);
-      await flow.focusOwnerForAdmission(owned);
-      await capture.validate(owned);
-      check(job === owned && owned.phase === 'awaiting-consent', 'STALE_RUN');
-      preparation.approve(owned); updatePhase('ready'); await persist();
     } else if (message.type === 'panel-approve') {
       check(!config.tee, 'CONSENT_REQUIRED');
       check(job.phase === 'awaiting-disclosure', 'STALE_RUN');

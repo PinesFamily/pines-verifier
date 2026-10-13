@@ -872,11 +872,11 @@
   "chatgptClaims": false,
   "chatgptIdentity": true,
   "extensionId": "lanmbpkmblcijblbllbikenpnceidmpj",
-  "sourceRevision": "ec784009487d18f471396758096eba838219b9fc",
+  "sourceRevision": "c739ebb0e7810b2585a3d2acb7f8408fdd08e41a",
   "sourceDirty": false,
   "publicRelease": {
     "format": "pines-private-headers-public-package-v2",
-    "version": "1.16.0",
+    "version": "1.17.0",
     "policySha256": "4edfc82cd5e2bd50258036e5a89f9ff9dc8da5e7b7dfe0a79904c1dbbc3f7a7d",
     "builtFromSource": true,
     "claimSigningEnabled": false

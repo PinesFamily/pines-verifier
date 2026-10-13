@@ -26,7 +26,6 @@ const entries = config.tee ? config.tee.providers : config.schemas.map(({schemaI
 
 const view = name => { panel.dataset.view = name; };
 const shortWallet = address => typeof address === 'string' && address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address ?? '';
-const clock = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const icons = {
   check: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3.8 8.3 2.7 2.7 5.7-6"/></svg>',
   alert: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 4.2v4.6"/><circle cx="8" cy="11.6" r=".4"/></svg>',
@@ -50,7 +49,7 @@ function show(schemaId) {
     const item = document.createElement('li');
     item.className = 'task';
     item.innerHTML = `<button type="button" class="task-head" aria-expanded="false"><span class="task-mark"></span><span class="task-title"></span><span class="task-meta"></span><span class="task-chevron">${icons.chevron}</span></button><div class="task-body"><div class="task-clip"><div class="task-content"><div class="task-rows"></div></div></div></div>`;
-    item.querySelector('.task-title').textContent = config.tee && index === 1 ? 'Authorize verification' : label;
+    item.querySelector('.task-title').textContent = config.tee && index === 1 ? 'What Pines receives' : label;
     item.querySelector('.task-head').addEventListener('click', () => {
       openBy.set(index, item.dataset.open !== 'true');
       void refresh();
@@ -189,11 +188,6 @@ async function refresh() {
     node('heading').textContent = retry?.title ?? progress.title;
     node('description').textContent = retry?.description ?? progress.description;
     node('description').hidden = !(retry?.description ?? progress.description);
-    const timedSession = running && state.phase !== 'completed' && Number.isSafeInteger(state.sessionBudgetMs);
-    const sessionRemaining = Math.min(state.deadline - Date.now(), state.sessionBudgetMs ?? Infinity);
-    node('session-time').hidden = !timedSession;
-    node('session-time').textContent = timedSession
-      ? `Total session: ${clock(sessionRemaining)} left of ${clock(state.sessionBudgetMs)} for setup and proof.` : '';
     const diagnostic = failureDiagnostic(state);
     node('failure-code').textContent = diagnostic;
     node('failure-code').hidden = !diagnostic;
@@ -248,10 +242,10 @@ async function refresh() {
       item.dataset.open = String(open);
       item.dataset.opens = String(opens);
       item.querySelector('.task-head').setAttribute('aria-expanded', String(open));
-      // The review waits on the visitor too, for Share and verify: its time left wears the same light.
-      item.dataset.waiting = String(index === 1 && active && ['awaiting-disclosure', 'awaiting-consent'].includes(phase));
+      // The ordinary review waits on the visitor, for Share and verify. A TEE run starts by itself.
+      item.dataset.waiting = String(index === 1 && active && phase === 'awaiting-disclosure');
       item.querySelector('.task-meta').textContent = index === 0 ? host
-        : index === 1 ? config.tee ? (done ? 'Authorized' : phase === 'ready' ? 'Starting…' : 'Your consent') : active && state.deadline ? `${clock(sessionRemaining)} total left` : done ? 'Shared' : ''
+        : index === 1 ? done ? 'Shared' : config.tee && active ? 'Starting…' : ''
         : '';
     });
 
@@ -264,7 +258,6 @@ async function refresh() {
     node('privacy-note').hidden = !guided || progress.step !== 0 || !running;
 
     node('approve').hidden = Boolean(config.tee) || !reviewing;
-    node('consent').hidden = !config.tee || phase !== 'awaiting-consent';
     node('continue').hidden = !progress.complete;
     node('recover').hidden = !(progress.recovery || progress.stopped);
     node('cancel').hidden = ['completed', 'cancelled', 'failed'].includes(state.phase);
@@ -292,7 +285,7 @@ node('allow-access').addEventListener('click', async () => {
   } catch { actionError = 'Chrome could not request access. Click Allow access again, or cancel.'; }
   finally { busy = false; node('allow-access').disabled = false; void refresh(); }
 });
-for (const [id, type] of [['consent', 'panel-consent'], ['capture-start', 'panel-capture'], ['approve', 'panel-approve'], ['cancel', 'panel-cancel'], ['continue', 'panel-continue'], ['recover', 'panel-recover']]) node(id).addEventListener('click', async () => {
+for (const [id, type] of [['capture-start', 'panel-capture'], ['approve', 'panel-approve'], ['cancel', 'panel-cancel'], ['continue', 'panel-continue'], ['recover', 'panel-recover']]) node(id).addEventListener('click', async () => {
   if (!runId || busy) return;
   actionError = undefined; busy = true; node(id).disabled = true;
   try { const result = await send(type, {runId}); if (!result?.ok) actionError = failureHelp(result?.error, undefined, shown); }

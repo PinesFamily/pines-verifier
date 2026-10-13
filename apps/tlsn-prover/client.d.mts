@@ -18,6 +18,8 @@ export type TlsnConfiguration = {
   verifierRevision: string; verifierOrigin: string; schemas: SchemaReference[];
   /** Present on APIs that assign a verifier per attempt. */
   attemptRouting?: AttemptRouting[];
+  /** Present on APIs whose starts, attempt reads and claims take no wallet signature. */
+  walletSignIn?: 'optional';
   tee?: TeeCapability;
   /** The identity’s signed ticket audience, checked by the web against its build artifact. */
   deploymentHash?: string;

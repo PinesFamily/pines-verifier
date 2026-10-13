@@ -16,7 +16,7 @@ export const providerOf = schemaId => providers[Object.hasOwn(providers, copySch
 const words = value => value.toLowerCase().split('_').filter(Boolean).map(word => word === 'x' ? 'X' : word[0].toUpperCase() + word.slice(1)).join(' ');
 // grok.com's names, not its enum's words: `GROK_PRO` is the plan it sells as SuperGrok. X's plan is Premium+ as the app says it.
 const grokPlans = Object.freeze({SUBSCRIPTION_TIER_X_PREMIUM_PLUS: 'X Premium+', SUBSCRIPTION_TIER_SUPER_GROK_LITE: 'SuperGrok Lite',
-  SUBSCRIPTION_TIER_GROK_PRO: 'SuperGrok', SUBSCRIPTION_TIER_SUPER_GROK_PLUS: 'SuperGrok Plus', SUBSCRIPTION_TIER_SUPER_GROK_PRO: 'SuperGrok Pro'});
+  SUBSCRIPTION_TIER_GROK_PRO: 'SuperGrok', SUBSCRIPTION_TIER_SUPER_GROK_PLUS: 'SuperGrok Plus', SUBSCRIPTION_TIER_SUPER_GROK_PRO: 'SuperGrok Heavy'});
 const chatgptPlans = Object.freeze({plus: 'Plus', pro: 'Pro', prolite: 'Pro Lite', promax: 'Pro Max'});
 const reviewFields = Object.freeze({
   plan_type: {label: 'Plan', format: value => chatgptPlans[value] ?? value},
@@ -41,7 +41,7 @@ export const stepsFor = schemaId => [`Open ${providerOf(schemaId).name}`, 'Revie
 export const steps = stepsFor();
 
 const helpFor = ({name, host, request}) => Object.freeze({
-  CONSENT_REQUIRED: 'Review the privacy explanation and agree before starting a new verification.',
+  CONSENT_REQUIRED: 'This verification could not start. Start again from Pines.',
   PREPARATION_EXPIRED: 'Preparation expired. Return to Pines and start again.',
   RATE_LIMITED: 'Too many verification attempts. Wait for the retry time shown above.',
   VERIFICATION_BUDGET_EXHAUSTED: 'This wallet has no verifications available in its rolling 30-day allowance. Return to Pines to check your saved verifications.',
@@ -138,7 +138,7 @@ export function progressOf(state, now = Date.now()) {
     ? state.phase === 'awaiting-permission' ? `Allow access to ${providerOf(state.schema?.schemaId).host} using the button below. Chrome remembers this choice until you remove access in the extension settings.`
       : state.phase === 'requesting' ? `Reading your plan. Keep the ${name} tab open.`
       : state.providerStarted ? `Sign in if ${name} asks. Keep its tab open.` : `Opening ${name} in a new tab…`
-    : step === 1 ? state.upfrontConsent ? state.phase === 'ready' ? 'Starting your authorized verification…' : 'Review the privacy explanation, then agree and verify. No proof slot is reserved yet.' : 'Check it below, then share.'
+    : step === 1 ? state.upfrontConsent ? 'Starting your verification…' : 'Check it below, then share.'
     : state.phase === 'proving' ? 'Checking the proof…'
     : recovery ? 'Pines hasn’t confirmed it yet.' : 'Saving with Pines…';
   const title = bound ? 'Account already linked'
