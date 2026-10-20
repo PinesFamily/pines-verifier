@@ -8,6 +8,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Deserialize;
 use std::{
     io::{self, Read},
+    os::fd::AsRawFd,
     os::unix::process::CommandExt,
     process::Command,
     sync::Arc,
@@ -294,10 +295,26 @@ const KMS_HANDOFF_VSOCK: u32 = 8006;
 // One boot performs a handful of bounded requests; this is not a proof route.
 const KMS_BYTE_CAP: u64 = 256 * 1024;
 const KMS_SLOTS: usize = 2;
+const PARENT_INGRESS: [&str; 2] = ["127.0.0.1:8969", "127.0.0.1:8981"];
+const PARENT_CONTROL: [&str; 2] = ["127.0.0.1:8970", "127.0.0.1:8982"];
+
+fn local_verifier_cid() -> Result<u32> {
+    let socket = std::fs::File::open("/dev/vsock")?;
+    let mut cid: u32 = 0;
+    // Linux IOCTL_VM_SOCKETS_GET_LOCAL_CID writes exactly one u32. The CID is a
+    // routing identity, never an authority: NSM binds the worker and boot keys.
+    let result = unsafe { libc::ioctl(socket.as_raw_fd(), 0x7b9, &mut cid) };
+    require(result == 0 && verifier_peer(cid))?;
+    Ok(cid)
+}
+
+fn verifier_peer(cid: u32) -> bool {
+    matches!(cid, 16 | 17)
+}
 
 async fn from_vsock(
     port: u32,
-    expected_peer: u32,
+    expected_peers: &'static [u32],
     destination: &'static str,
     limit: u64,
     permits: Arc<Semaphore>,
@@ -305,7 +322,7 @@ async fn from_vsock(
     let listen = VsockListener::bind(VsockAddr::new(libc::VMADDR_CID_ANY, port))?;
     loop {
         let (socket, peer) = listen.accept().await?;
-        if peer.cid() != expected_peer {
+        if !expected_peers.contains(&peer.cid()) {
             continue;
         }
         let Ok(permit) = permits.clone().try_acquire_owned() else {
@@ -352,17 +369,21 @@ async fn bridge(mode: &str) -> Result<()> {
         "enclave-ingress" => {
             from_vsock(
                 8000,
-                3,
+                &[3],
                 "127.0.0.1:18000",
                 70 * 1024 * 1024,
                 Arc::new(Semaphore::new(MAX_PROOF_SLOTS + 2)),
             )
             .await
         }
-        "parent-ingress" => {
+        "parent-ingress" | "parent-ingress-v2" => {
             from_tcp(
-                "127.0.0.1:8969",
-                16,
+                if mode == "parent-ingress" {
+                    PARENT_INGRESS[0]
+                } else {
+                    PARENT_INGRESS[1]
+                },
+                if mode == "parent-ingress" { 16 } else { 17 },
                 8000,
                 70 * 1024 * 1024,
                 Arc::new(Semaphore::new(MAX_PROOF_SLOTS + 2)),
@@ -372,30 +393,39 @@ async fn bridge(mode: &str) -> Result<()> {
         "enclave-control" => {
             from_vsock(
                 8004,
-                3,
+                &[3],
                 "127.0.0.1:18010",
                 4 * 1024 * 1024,
                 Arc::new(Semaphore::new(8)),
             )
             .await
         }
-        "parent-control" => {
+        "parent-control" | "parent-control-v2" => {
             from_tcp(
-                "127.0.0.1:8970",
-                16,
+                if mode == "parent-control" {
+                    PARENT_CONTROL[0]
+                } else {
+                    PARENT_CONTROL[1]
+                },
+                if mode == "parent-control" { 16 } else { 17 },
                 8004,
                 4 * 1024 * 1024,
                 Arc::new(Semaphore::new(8)),
             )
             .await
         }
-        "parent-egress" => {
+        "parent-egress" | "parent-colocated-egress" => {
             let permits = Arc::new(Semaphore::new(MAX_PROOF_SLOTS));
             let [a, b, c] = PROVIDER_ROUTES;
+            let peers: &'static [u32] = if mode == "parent-egress" {
+                &[16]
+            } else {
+                &[16, 17]
+            };
             tokio::try_join!(
-                from_vsock(a.vsock, 16, a.destination, 131072, permits.clone()),
-                from_vsock(b.vsock, 16, b.destination, 131072, permits.clone()),
-                from_vsock(c.vsock, 16, c.destination, 131072, permits.clone())
+                from_vsock(a.vsock, peers, a.destination, 131072, permits.clone()),
+                from_vsock(b.vsock, peers, b.destination, 131072, permits.clone()),
+                from_vsock(c.vsock, peers, c.destination, 131072, permits.clone())
             )?;
             Ok(())
         }
@@ -419,10 +449,14 @@ async fn bridge(mode: &str) -> Result<()> {
             )
             .await
         }
-        "parent-kms-egress" => {
+        "parent-kms-egress" | "parent-colocated-kms-egress" => {
             from_vsock(
                 KMS_EGRESS_VSOCK,
-                16,
+                if mode == "parent-kms-egress" {
+                    &[16]
+                } else {
+                    &[16, 17]
+                },
                 KMS_ENDPOINT,
                 KMS_BYTE_CAP,
                 Arc::new(Semaphore::new(KMS_SLOTS)),
@@ -439,10 +473,14 @@ async fn bridge(mode: &str) -> Result<()> {
             )
             .await
         }
-        "parent-kms-handoff" => {
+        "parent-kms-handoff" | "parent-colocated-kms-handoff" => {
             from_vsock(
                 KMS_HANDOFF_VSOCK,
-                16,
+                if mode == "parent-kms-handoff" {
+                    &[16]
+                } else {
+                    &[16, 17]
+                },
                 KMS_PARENT_HANDOFF,
                 KMS_BYTE_CAP,
                 Arc::new(Semaphore::new(KMS_SLOTS)),
@@ -468,6 +506,7 @@ async fn main() {
         "clock" => clock(),
         "loopback" => loopback(),
         "time" => nsm_time().map(|ms| println!("{{\"timestamp\":{ms}}}")),
+        "verifier-cid" => local_verifier_cid().map(|cid| println!("{{\"cid\":{cid}}}")),
         _ => bridge(&mode).await,
     };
     if result.is_err() {
@@ -480,6 +519,27 @@ async fn main() {
 mod tests {
     use super::*;
     use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
+    #[test]
+    fn colocated_verifier_peers_exclude_signer_and_parent() {
+        assert!(verifier_peer(16));
+        assert!(verifier_peer(17));
+        for cid in [0, 1, 2, 3, 15, 18, u32::MAX] {
+            assert!(!verifier_peer(cid));
+        }
+    }
+    #[test]
+    fn parent_listeners_do_not_alias_each_other_or_kms_handoff() {
+        let ports: Vec<_> = PARENT_INGRESS
+            .iter()
+            .chain(PARENT_CONTROL.iter())
+            .copied()
+            .chain([KMS_PARENT_HANDOFF])
+            .collect();
+        assert_eq!(
+            ports.iter().collect::<std::collections::HashSet<_>>().len(),
+            ports.len()
+        );
+    }
     #[test]
     fn native_memory_policy_is_integer_and_bounded() {
         for value in ["448", "512", "2048", "3072", "4096"] {
@@ -662,7 +722,13 @@ fn independent_disclosure_floors_and_canonical_budgets() {
     for value in ["447", "384", "0447", "4097"] {
         assert!(native_disclosure_memory("private-headers-gzip-v1", value).is_err());
     }
-    for policy in ["full-response-v2", "", "redacted-max-v1", "private-headers-gzip", "private-headers-gzip-v2"] {
+    for policy in [
+        "full-response-v2",
+        "",
+        "redacted-max-v1",
+        "private-headers-gzip",
+        "private-headers-gzip-v2",
+    ] {
         assert!(native_disclosure_memory(policy, "1024").is_err());
     }
 }

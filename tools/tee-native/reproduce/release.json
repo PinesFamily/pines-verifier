@@ -1,23 +1,23 @@
 {
-  "status": "Live 2026-10-12: the v5 image serves Pines on Base (chain 8453, revision tee-v5-20261012, trust policy version 3). The identity signs the contract deployment into each ticket; measured code validates its format, and every receipt commits to that ticket. The image no longer fixes a contract deployment. Two sealed files differ from the 1.15.0 enclave (hardware/context.mjs and protocol.mjs); all four executables are byte-identical. Two clean builds and two exported-source rebuilds reproduce these PCRs. Fresh Nitro quotes pass for all three providers and the public identity serves the new revision. Signed-in provider proof and live-claim acceptance for this image are still pending.",
+  "status": "Live from the 2026-10-20 cutover: the migration verifier image (V) serves Pines on Base (chain 8453, revision tee-v5-20261012, trust policy version 3) on the Sydney parent beside the signing enclave (S). Two clean builds of aab64b4a reproduce every PCR and executable; the image was activated on hardware and passed the three direct provider claims and a sponsored claim before the cutover. The previous v5 image 1ea73f73 is retired with the old world.",
   "enclave": {
-    "sourceCommit": "0bdad97efb70fad68456d027fab36bacce26fee9",
-    "sourceEpoch": 1791797202,
+    "sourceCommit": "aab64b4ae7f4ac54286f10dc5011e0096d46a135",
+    "sourceEpoch": 1792297388,
     "apiPublicKeyFile": "candidate-api-public-key.json",
-    "contextFilesSha256": "1c78dccab2e7f02778c78cd0e4924a81b7d2d2cc00ff1947b1fbc6004b1f7d9c",
+    "contextFilesSha256": "ef61dcecd54aa5ca9bcb4d3dec6092f463734a226b695e1d80c9c4e9e8a3d815",
     "contextFiles": 164,
     "pcrs": [
-      "1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4",
+      "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa",
       "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-      "1b38ddf5ed6fed44572e5187608a5c32bdb59c536c61adbb2e13450a149fa4a0b0c0af63425621845c98e96fee05f427"
+      "603a4d240b10cabc41f557bea8b9d3724a1d245da74acbb3358031b31215b9e9e538574ebafcaf337957244340b008ea"
     ],
     "executables": {
       "node": "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068",
-      "pines-nitro-runtime": "efaf3635d62c7474d266f0efc109d73359c905d4afca120b6805b8034234fcd2",
+      "pines-nitro-runtime": "5d0a718e4e877ac828688c0dd4b84825cf6eb28136bfab2160b7867230be08fb",
       "tee-hardware": "3dffc6178ed7076900f84cb4b7a23478f585f41dd1698989bbc2709b26245868",
       "tee-identity": "b6f99bd5adb282ebce56832a28120c81b776cbf59ea73737be122ea7c58ba838"
     },
-    "selectedEifSha256": "48cb976c076472f10f9d7f1b016d03a68742251587103f87b49aeeea4fda5a78"
+    "selectedEifSha256": "689e8db26a3e30bd824137b251f7262c5ef29c871bbeaf5922248c642d2a4e2c"
   },
   "attestationWasm": {
     "sha256": "dad876167a51019dcb81495552a48ca20da285487d3a9c2ead43aff288b224bf"

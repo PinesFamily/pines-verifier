@@ -1,28 +1,61 @@
 {
   "chainId": 8453,
-  "deployBlock": 52544541,
-  "deployer": "0x830f00c8346047e05BEB4Ec2645295F147B48228",
-  "admin": "0x830f00c8346047e05BEB4Ec2645295F147B48228",
-  "guardian": "0x830f00c8346047e05BEB4Ec2645295F147B48228",
   "launchParamsVersion": 3,
   "feeRoutingVersion": 3,
   "claimCapacityVersion": 2,
   "adminControlsVersion": 4,
   "claimRelayVersion": 1,
-  "launchpad": "0x3356b01AEE185fD83b3bE508e8c8149457E86aa8",
-  "merchantRegistry": "0x751c345C7d534e6b5109Ef9849DBB2184E3a4738",
-  "nullifierRegistry": "0x038b0A4532A591b54D59540589fB27E9Cb095BC9",
-  "devBuyRouter": "0x8c4d653cC8077c088Ba1873aE177332D5586884d",
-  "treasury": "0xEdF07E72Dd1d80e85A2320C44Ae88684aF18AfA2",
-  "verifier": "0x49a23bCC31d317a57c8881E95B38D5cca005e92d",
-  "providerControl": "0xF7C2905121520b5fE91f0FbA9DeE80fae3cc719e",
-  "attestor": "0x6CCe04827d6b689FC512b5A5f3912862CAf54925",
-  "pinesAirdropImpl": "0xC4e30FEA88AD2Ed4bCeBC012a59de9D4e38886FE",
-  "dividendDistributorImpl": "0xd5DbAE72EEf46FE2e941F74Df56DBf5184490C0f",
-  "cohorts": [
-    {"merchantId": "0xb434d5ddbce16ab0f4d090796f5297ad8f2f41ba4631e837f3904f3e35f44b7d", "domain": "chatgpt.com", "templateId": "0x662b7ff6b67b25afc01a0c5d2bb37a54b9c4803ff1913bad64a0d18acde652d9"},
-    {"merchantId": "0x2a4b6b87e95b56239f26f178e4edbe37b08b47973c8450cace56e492d4e90ac2", "domain": "claude.ai", "templateId": "0xbc95b5741701b22b76f72614d3ac6f29dae97266c8b26062818ab07ce639856b"},
-    {"merchantId": "0x049f435289976f45d0562d5b84a34ed5c46aeb0801174e5cccd1f6105cffcf2b", "domain": "grok.com", "templateId": "0xafd962e2423cf2b643b7c0859ceabaacf80eaa6e208c034fe98209030155c306"}
+  "numerairesSeeded": [
+    "0xb20000000000000000000078ee7ce2fE4908108C",
+    "0xb2000000000000000000008bC8786B856E61707C",
+    "0xb200000000000000000000C2e324d24d7eEcd1fb",
+    "0xb2000000000000000000002D0BA3164cc74f58B7",
+    "0xb200000000000000000000d9192b6B456483C2E8",
+    "0xb2000000000000000000004884b426556b92883d",
+    "0xb200000000000000000000397293Cb8cda9a10c5",
+    "0xb2000000000000000000007b9fcbd005511aCBd5",
+    "0xb2000000000000000000001e800a7f5189430cD0",
+    "0xB200000000000000000000Ab99cFa739E253872B",
+    "0xb200000000000000000000Fd2f87532B90095211",
+    "0xb2000000000000000000007d16372840dF4dAbbe"
   ],
-  "numerairesSeeded": ["0xb20000000000000000000078ee7ce2fE4908108C", "0xb2000000000000000000008bC8786B856E61707C", "0xb200000000000000000000C2e324d24d7eEcd1fb", "0xb2000000000000000000002D0BA3164cc74f58B7", "0xb200000000000000000000d9192b6B456483C2E8", "0xb2000000000000000000004884b426556b92883d", "0xb200000000000000000000397293Cb8cda9a10c5", "0xb2000000000000000000007b9fcbd005511aCBd5", "0xb2000000000000000000001e800a7f5189430cD0", "0xB200000000000000000000Ab99cFa739E253872B", "0xb200000000000000000000Fd2f87532B90095211", "0xb2000000000000000000007d16372840dF4dAbbe"]
+  "attestationVersion": 2,
+  "planIdVersion": 2,
+  "nullifierRegistryVersion": 2,
+  "claimEnvelopeFields": 4,
+  "coSigningSupported": true,
+  "coSigningPolicy": "mandatory-dual-v1",
+  "deployer": "0x830f00c8346047e05BEB4Ec2645295F147B48228",
+  "admin": "0x830f00c8346047e05BEB4Ec2645295F147B48228",
+  "guardian": "0x830f00c8346047e05BEB4Ec2645295F147B48228",
+  "treasury": "0xEdF07E72Dd1d80e85A2320C44Ae88684aF18AfA2",
+  "deployBlock": 52754756,
+  "launchpad": "0x5fA15677d11F644d758e8F246daa218e05FC0A3D",
+  "merchantRegistry": "0xbFee8E5E48EeE264eaF39DD26Aee3Bf2EAc2491C",
+  "verifier": "0xD863fE7C84e51E8fe8f692747a4731Ba4fd25a56",
+  "providerControl": "0x5FaED4B633EB98F6Cc11DFa3b9181ad684C09b5a",
+  "devBuyRouter": "0xd275EEc13868Cae985c5decb67EB5e46D27cd35D",
+  "pinesAirdropImpl": "0x2F3BeCCFf50fc2aA4C1639e58371cD4cB37a0a26",
+  "dividendDistributorImpl": "0x2A8556022427A4566b0b135d708d70271f41226e",
+  "nullifierRegistry": "0x4e7280646e8b01a7d6187f881217f97c6b7aa604",
+  "trustRegistry": "0xf961ec0a839651960a0d08c9db995a0fb19aef1a",
+  "trustRegistryRuntimeHash": "0x1f9cdfd0650eb8b691517f3f6ad88020e43abc04fe0b0120704abdbdf9ae9eb9",
+  "verifierRuntimeHash": "0x014e1f070664f1db2b3cdc0e8815f8f406bc69d9feda82aa3c7768b1d8305ca2",
+  "cohorts": [
+    {
+      "domain": "chatgpt.com",
+      "templateId": "0x662b7ff6b67b25afc01a0c5d2bb37a54b9c4803ff1913bad64a0d18acde652d9",
+      "merchantId": "0xb434d5ddbce16ab0f4d090796f5297ad8f2f41ba4631e837f3904f3e35f44b7d"
+    },
+    {
+      "domain": "claude.ai",
+      "templateId": "0xbc95b5741701b22b76f72614d3ac6f29dae97266c8b26062818ab07ce639856b",
+      "merchantId": "0x2a4b6b87e95b56239f26f178e4edbe37b08b47973c8450cace56e492d4e90ac2"
+    },
+    {
+      "domain": "grok.com",
+      "templateId": "0xafd962e2423cf2b643b7c0859ceabaacf80eaa6e208c034fe98209030155c306",
+      "merchantId": "0x049f435289976f45d0562d5b84a34ed5c46aeb0801174e5cccd1f6105cffcf2b"
+    }
+  ]
 }

@@ -14,6 +14,7 @@ import {newReplayMetadata,updateReplayMetadata,advanceReplayProofStep,measureDec
 import {PRIVATE_HEADERS_POLICY_ID,PRIVATE_HEADERS_FAILURES,isPrivateHeadersSchema,pathParamsFrom,policyIdOf,requiresPathParams,schemaFailureCode} from './private-headers.mjs';
 import {prepareReplayFor,requestTargetFor} from '../capture/schema-adapter.mjs';
 import {gunzip} from '../../../packages/verification-schemas/src/gzip.ts';
+import {previewExchange} from '../../../packages/verification-schemas/src/evaluate.ts';
 import {metadataChannel,replayMetadataFailureCode} from './qualification-metadata-channel.mjs';
 let active;
 const metadataAcks=metadataChannel({send:message=>self.postMessage(message)});
@@ -21,6 +22,15 @@ self.onmessage = ({data}) => {
   if(data.type==='replay-metadata-ack'&&data.runId===active){metadataAcks.acknowledge(data);return;}
   if (data.type === 'start' && !active) {active = data.runId; void run(data);}
 };
+// A plan this release does not verify (ChatGPT Free or Go, say) fails the schema's plan check as a bare CHECK_FAILED,
+// which would read as a broken response. Re-run the same local precheck without the plan field's checks: when it then
+// passes, the plan was the only refusal. Nothing is revealed either way; this only picks the code the panel explains.
+function onlyThePlanFailed(error, provider, sent, recv, recipient) {
+  if (error?.name !== 'SchemaError' || error.code !== 'CHECK_FAILED' || typeof provider.planField !== 'string') return false;
+  const checks = provider.schema.checks.filter(rule => rule.field !== provider.planField);
+  if (checks.length === provider.schema.checks.length) return false;
+  try {previewExchange({...provider.schema, checks}, sent, recv, recipient); return true;} catch {return false;}
+}
 async function persistMetadata(runId,record) {
   await metadataAcks.persist(runId,record);
 }
@@ -93,7 +103,9 @@ async function run({runId, attempt, recipient, upfrontConsent, replay: value}) {
       throw Error(['401', '403', '429'].includes(status) ? `PROVIDER_HTTP_${status}` : 'PROVIDER_RESPONSE_UNSUPPORTED');
     }
     failureCode = 'TEE_DISCLOSURE_FAILED';
-    const plan = planDisclosureForProvider(provider, sent, recv, recipient, io.disclosurePolicy);
+    let plan;
+    try {plan = planDisclosureForProvider(provider, sent, recv, recipient, io.disclosurePolicy);}
+    catch (error) {throw onlyThePlanFailed(error, provider, sent, recv, recipient) ? Error('INELIGIBLE_PLAN') : error;}
     const facts = {...(policy.identity?{accountId:plan.facts.id}:{pseudonym:await providerPseudonym(provider,plan.facts.id)}),
       plan: plan.facts.plan, sentBytes: sent.length, recvBytes: recv.length};
     metadata=metadataRecord(()=>updateReplayMetadata(metadata,'signed-in-shape'));await persistMetadata(runId,metadata);

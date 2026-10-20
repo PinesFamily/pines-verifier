@@ -2,14 +2,15 @@ import {check, exact} from './wire.mjs';
 import {parseJson} from '../../packages/verification-schemas/src/json.ts';
 import {headerValue, utf8} from '../../packages/verification-schemas/src/http.ts';
 
-// Measured inventory: the response header names each provider may send. Unknown header names and
-// credentials in the body refuse BEFORE reveal.
+// Measured inventory: selective disclosure refuses unknown response header names and
+// credential-looking body fields before reveal. The private-headers policy hides header
+// values and sends the bounded body only to the measured enclave, under explicit consent.
 //
 // The body is no longer held to an observed per-field shape. That refused every account whose provider
 // added a field or filled a null one, while the fields a decision reads are judged by the schema's
-// selector and checks regardless. What still refuses is a credential anywhere in the body: a non-empty
-// string under a credential-named key, or a string in a known credential format. Size and depth stay
-// bounded by the schema and `parseJson`.
+// selector and checks regardless. In selective and complete modes, a non-empty string
+// under a credential-named key or in a known credential format still refuses. Size and
+// depth remain bounded by the schema and `parseJson`.
 const CREDENTIAL_NOUNS = new Set(['token', 'tokens', 'secret', 'secrets', 'password', 'passwords', 'passwd', 'passphrase',
   'cookie', 'cookies', 'credential', 'credentials', 'authorization', 'apikey', 'accesstoken', 'refreshtoken', 'idtoken',
   'authtoken', 'sessionkey', 'sessionid', 'sessiontoken', 'privatekey', 'secretkey', 'accesskey']);
@@ -54,10 +55,11 @@ export function inspectProviderShape(message, inventory, responseDisclosure = 's
   check(encoding === undefined || (responseDisclosure === 'private-headers' && encoding.toLowerCase() === 'gzip'), 'CONTENT_ENCODING');
   // In complete-response mode the owner consents to every bounded HTTP header,
   // including opaque values. HTTP/framing and body-schema validation still apply.
-  // Under private headers the values are hidden but the NAMES are public, so the
-  // allowlist still refuses an unknown header.
-  if (responseDisclosure !== 'complete') for (const h of message.headers) check(inventory.responseHeaders.includes(h.name), 'UNQUALIFIED_HEADER');
-  const root = parseJson(utf8(message.body), 32); refuseCredentials(root);
+  // Private headers hides all non-framing values; header names remain visible in framing.
+  // Selective mode still refuses unknown names because it may reveal their values.
+  if (responseDisclosure === 'selective') for (const h of message.headers) check(inventory.responseHeaders.includes(h.name), 'UNQUALIFIED_HEADER');
+  const root = parseJson(utf8(message.body), 32);
+  if (responseDisclosure !== 'private-headers') refuseCredentials(root);
   return root;
 }
 export function inspectProvider(message, inventory) {

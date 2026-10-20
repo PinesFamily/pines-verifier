@@ -45,16 +45,15 @@ the package was built and packaged from; this repository is a path-for-path expo
 extension sources follow the site-served ZIP's source snapshot, with the comment-only omissions described below.
 The version number is set by the release packaging, not by `apps/tlsn-prover/build.mjs`.
 
-The extension audit sources in this snapshot follow the site-served **1.17.0 ZIP** package's source commit
-`c739ebb0e7810b2585a3d2acb7f8408fdd08e41a`; its ZIP SHA-256 is
-`d73ce18752e14d66906a42679bf94758f1849bdbf928f14eac12b1e552cad846`.
-The Chrome Web Store listing is uploaded separately and can serve a different version; this source snapshot
-describes the site ZIP, not every installed Store package.
+The extension audit sources in this snapshot follow the site-served **1.19.0 ZIP** package's source commit
+`c56fafccbb2b775d3816d4b58020e3e72d7d8243`; its ZIP SHA-256 is
+`8667563d9fedfcc3e7fdd478f2db49f2281fac8e9ec39a5e9ff8eee2758693aa`. The Chrome Web Store serves the same version
+(the store's copy omits the manifest `key`); this source snapshot describes the site ZIP.
 Four internal comment attributions were removed from `client.d.mts`, `client.mjs`, `src/background.js` and
-`src/panel.js` under `apps/tlsn-prover`; executable source is unchanged by those omissions. The current world
-artifact and transparency text have their own deployment date. Every measured enclave source, policy pin and
-`tools/tee-native/reproduce/release.json` remains byte-identical to the preceding public release. The historical
-claim-signing flag in the package's `build.json` describes packaging; current policy is published by the identity API.
+`src/panel.js` under `apps/tlsn-prover`; executable source is unchanged by those omissions. This release moves to the
+signing-enclave world: a new verification image (the PCRs below), the policy that pins it, and the world artifact
+`contracts/deployments/production.json`. The historical claim-signing flag in the package's `build.json` describes
+packaging; claims in this world are signed by a separate signing enclave and published by the identity API.
 
 `id.pines.family/tee/health` is the API's own report of readiness and capacity, not signed evidence. The signed
 attestation reaches the extension with each verification, in the response to `/tee/admission`
@@ -86,13 +85,13 @@ build metadata into the file that PCRs do not cover. Compare PCRs, which is also
 
 | | |
 |---|---|
-| Source commit | `0bdad97efb70fad68456d027fab36bacce26fee9` (build epoch `1791797202`) |
-| Enclave PCR0 | `1ea73f73c91d558de9885b9b364f37e6354266fe65b0619218ea466a5f26492dec8db4cefde5c44d89578bb909cf1aa4` |
+| Source commit | `aab64b4ae7f4ac54286f10dc5011e0096d46a135` (build epoch `1792297388`) |
+| Enclave PCR0 | `cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa` |
 | Enclave PCR1 | `4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493` |
-| Enclave PCR2 | `1b38ddf5ed6fed44572e5187608a5c32bdb59c536c61adbb2e13450a149fa4a0b0c0af63425621845c98e96fee05f427` |
+| Enclave PCR2 | `603a4d240b10cabc41f557bea8b9d3724a1d245da74acbb3358031b31215b9e9e538574ebafcaf337957244340b008ea` |
 | Attestation validator | `pines_nitro_validation_bg.wasm` SHA-256 `dad876167a51019dcb81495552a48ca20da285487d3a9c2ead43aff288b224bf` |
 
-Live 2026-10-12: the v5 image serves Pines on Base (chain 8453, revision tee-v5-20261012, trust policy version 3). The identity signs the contract deployment into each ticket; measured code validates its format, and every receipt commits to that ticket. The image no longer fixes a contract deployment. Two sealed files differ from the 1.15.0 enclave (hardware/context.mjs and protocol.mjs); all four executables are byte-identical. Two clean builds and two exported-source rebuilds reproduce these PCRs. Fresh Nitro quotes pass for all three providers and the public identity serves the new revision. Signed-in provider proof and live-claim acceptance for this image are still pending.
+Live from the 2026-10-20 cutover: the migration verifier image (V) serves Pines on Base (chain 8453, revision tee-v5-20261012, trust policy version 3) on the Sydney parent beside the signing enclave (S). Two clean builds of aab64b4a reproduce every PCR and executable; the image was activated on hardware and passed the three direct provider claims and a sponsored claim before the cutover. The previous v5 image 1ea73f73 is retired with the old world.
 
 ## TLSNotary and the vendored crates
 

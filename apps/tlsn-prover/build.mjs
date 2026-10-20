@@ -7,6 +7,7 @@ import {build} from 'esbuild';
 import {funnelOrigins, matchPatternsFor} from './src/funnel-origins.mjs';
 import {copyPinnedWasm} from './wasm-io-package.mjs';
 import {regionalConnectSources} from './regional-entry-build.mjs';
+import {teePolicyFile} from './tee-policy-file.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -14,6 +15,8 @@ const out = join(here, 'dist');
 const env = process.env;
 const teePath = env.PINES_TEE_PUBLIC_CONFIG;
 const publicRelease = env.PINES_TEE_PUBLIC_RELEASE === '1';
+const localQualification = env.PINES_TEE_LOCAL_QUALIFICATION === '1';
+if (env.PINES_TEE_LOCAL_QUALIFICATION !== undefined && !localQualification) throw Error('TEE_LOCAL_QUALIFICATION');
 // The public private-headers package, built directly from clean committed source: the
 // qualified API policy, the public transport and the exact page origins and version pinned in
 // config/tee-public-release-private-headers.json. No qualification receiver, fixture or regional entry.
@@ -86,13 +89,15 @@ const application = env.PINES_TLSN_APPLICATION ?? 'pines';
 // (TEE_CONTEXT_DRIFT below), which is 8453 since the v3 re-cut.
 const chainId = Number(env.PINES_TLSN_CHAIN_ID ?? 8453);
 if (!/^[a-zA-Z0-9._-]{1,80}$/.test(verifierRevision) || !/^[a-zA-Z0-9._-]{1,64}$/.test(application) || !Number.isSafeInteger(chainId) || chainId <= 0) throw Error('Invalid verifier audience or revision');
+const migrationQualification = env.PINES_TEE_MIGRATION_QUALIFICATION === undefined ? null
+  : (await import('../../tools/tee-native/hardware/migration-qualification.mjs')).migrationQualificationBuild({env,publicConfig:teePublic,origins,sourceDirty});
 let tee;
 if (teePublic) {
   const {providersFor, hardwareCapability} = await import('../../tools/tee-native/profile.mjs');
   const {policyForSchema} = await import('../../tools/tee-native/policy.mjs');
   const {CONTEXT} = await import('../../tools/tee-native/hardware/context.mjs');
-  const policySet = qualification ? qualification.policy : teeFixture ? teePublic.policy
-    : JSON.parse(await readFile(join(root, publicPrivateHeaders ? privateHeadersRelease.policyFile : 'tools/tee-native/hardware/policy.json'), 'utf8'));
+  const policySet = migrationQualification ? migrationQualification.policy : qualification ? qualification.policy : teeFixture ? teePublic.policy
+    : JSON.parse(await readFile(join(root, teePolicyFile(disclosurePolicyId)), 'utf8'));
   if (teeFixture && (!teeFixture.origin || origins.length !== 1 || origins[0] !== teeFixture.origin || !['http://localhost:5262'].includes(teeFixture.origin))) throw Error('TEE_FIXTURE_ORIGIN_REFUSED');
   if (!/^[a-f0-9]{64}$/.test(teePublic.apiKey) || JSON.stringify(teePublic.policy) !== JSON.stringify(policySet)) throw Error('TEE_TRUST_POLICY_UNQUALIFIED');
   if (qualification && qualification.disclosurePolicy !== disclosurePolicyId) throw Error('QUALIFICATION_DISCLOSURE_POLICY');
@@ -124,6 +129,9 @@ if (teePublic) {
 // Each class has its own pinned capability file; the full-response pin is the unchanged one.
 const capabilityPin = disclosurePolicyId === 'full-response-v1' ? 'config/tee-capability.json' : 'config/tee-capability-private-headers.json';
 if (tee && JSON.stringify(tee.capability) !== JSON.stringify(JSON.parse(await readFile(join(here, capabilityPin), 'utf8')))) throw Error('TEE_PUBLIC_PIN_DRIFT');
+if (localQualification && (sourceDirty || publicRelease || publicPrivateHeaders || qualification || teeFixture || regionalSuffix !== undefined || !tee
+  || disclosurePolicyId !== 'private-headers-gzip-v1' || tee.api !== 'https://identity-qualification.up.railway.app/tee'
+  || JSON.stringify(origins) !== JSON.stringify(['http://localhost:5270']))) throw Error('TEE_LOCAL_QUALIFICATION_SCOPE');
 const config = {protocol: 'pines-tlsn-bridge-v1', wasmVersion: '0.1.0-alpha.15', origins, verifierOrigin, verifierRevision, verifierPolicy, routing: tee ? ['pinned'] : ['pinned', 'assigned'], testBuild, application, chainId, captureProvider: chatgpt || privateFixture,
   ...(qualification?.mode==='prebuild'
     ? {qualificationResponseMetadata:{...qualification.responseMetadata,sourceRevision}} : {}),
@@ -174,7 +182,7 @@ if(config.qualificationResponseMetadata?.receiver)connectSources.push(new URL(co
 // Only the dedicated entry zone: channel sockets and credential-free latency probes. Never `*.pines.family`.
 if(tee?.regionalEntry)connectSources.push(...regionalConnectSources(tee.regionalEntry.suffix));
 const manifest = {
-  manifest_version: 3, minimum_chrome_version: '141', name: qualification ? 'Pines Verifier LOCAL QUALIFICATION' : teeFixture ? 'Pines Verifier HARDWARE FIXTURE' : 'Pines Verifier', version: qualification ? qualification.version : publicPrivateHeaders ? privateHeadersRelease.version : tee ? '1.4.0' : '0.9.3', key: identity.key,
+  manifest_version: 3, minimum_chrome_version: '141', name: migrationQualification || qualification || localQualification ? 'Pines Verifier LOCAL QUALIFICATION' : teeFixture ? 'Pines Verifier HARDWARE FIXTURE' : 'Pines Verifier', version: migrationQualification ? migrationQualification.version : qualification ? qualification.version : localQualification ? '1.17.0' : publicPrivateHeaders ? privateHeadersRelease.version : tee ? '1.4.0' : '0.9.3', key: identity.key,
   icons: {16: 'icons/icon-16.png', 32: 'icons/icon-32.png', 48: 'icons/icon-48.png', 128: 'icons/icon-128.png'},
   description: tee ? 'Verify your ChatGPT, Claude or Grok subscription privately with native TLSNotary and an attested AWS enclave.' : claude || grok ? `Prove your paid ${['ChatGPT', ...(claude ? ['Claude'] : []), ...(grok ? ['Grok'] : [])].join(', ').replace(/, ([^,]+)$/, ' or $1')} subscription to Pines with a zkTLS proof.` : chatgptClaims || chatgptIdentity ? 'Prove your paid ChatGPT subscription to Pines with a zkTLS proof.' : 'Review disclosures and create non-claimable TLSNotary Proxy pilot receipts.',
   background: {service_worker: 'background.js', type: 'module'},
@@ -195,6 +203,8 @@ const publishedConfig=structuredClone(config);
 if(publishedConfig.qualificationResponseMetadata)delete publishedConfig.qualificationResponseMetadata.receiverToken;
 await writeFile(join(out, 'build.json'), JSON.stringify({...publishedConfig, sourceRevision, sourceDirty,
   ...(qualification ? {qualificationOnly:true,qualification:qualification.declaration} : {}),
+  ...(migrationQualification ? {qualificationOnly:true,qualification:migrationQualification.declaration} : {}),
+  ...(localQualification ? {localQualification:{format:'pines-local-qualification-build-v1',version:'1.17.0',origin:origins[0],transport:tee.api}} : {}),
   ...(publicPrivateHeaders ? {publicRelease:{format:'pines-private-headers-public-package-v2',version:privateHeadersRelease.version,
     policySha256:createHash('sha256').update(await readFile(join(root, privateHeadersRelease.policyFile))).digest('hex'),
     builtFromSource:true,claimSigningEnabled:false}} : {}),

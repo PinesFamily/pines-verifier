@@ -10,12 +10,16 @@ import {initializeNitro,inspectNitroEncoding, quoteBinding} from '../nitro.mjs';
 import {createKeyedPseudonymAdapter} from '../kms/identity-adapter.mjs';
 import {HARDWARE_PROVIDERS, providerForTicket, hardwareCapability} from '../profile.mjs';
 import {clockGuard} from './clock-guard.mjs';
-import {CONTEXT, WORKER_ID} from './context.mjs';
+import {CONTEXT, workerIdForCid} from './context.mjs';
 import {createFleetMembership} from '../fleet-membership.mjs';
 import {DEFAULT_CAPACITY_SELECTION,resourcePolicyFor,checkRuntimeAllocation,observeAllocation,checkCapacitySelection} from '../capacity-policy.mjs';
 import {nativeAllocation} from '../capacity-policy.mjs';
 import {FULL_RESPONSE,PRIVATE_HEADERS,disclosurePolicy} from '../disclosure-policy.mjs';
 const bootId = random();
+const cidDocument = await new Promise((resolve,reject)=>execFile('/app/bin/pines-nitro-runtime',['verifier-cid'],
+  {timeout:5000,maxBuffer:1024,encoding:'utf8'},(error,value)=>error?reject(Error('WORKER_CID')):resolve(value)));
+const cid = JSON.parse(cidDocument); exact(cid,['cid']);
+const WORKER_ID = workerIdForCid(cid.cid);
 const cfg = JSON.parse(await readFile(new URL('./image-config.json', import.meta.url), 'utf8'));
 // Capacity is never sealed: the image carries the validators and,
 // optionally, the one public authority key. An image configuration naming capacity refuses to boot.

@@ -56,10 +56,10 @@ const helpFor = ({name, host, request}) => Object.freeze({
   TEE_NATIVE_CONFIG_FAILED: 'The proof engine could not initialize this release. Reload the Pines extension; share the error code if it repeats.',
   TEE_NATIVE_SETUP_FAILED: 'The proof engine could not connect to the protected verifier. Return to Pines and retry; share the error code if it repeats.',
   TEE_PROVIDER_REQUEST_FAILED: `The protected request to ${name} could not finish. Return to Pines and retry; share the error code if it repeats.`,
-  TEE_DISCLOSURE_FAILED: `This ${name} response could not be prepared safely for verification. No account response was shared. Share the error code so compatibility can be checked.`,
+  TEE_DISCLOSURE_FAILED: `${name} answered in a way this version of Pines Verifier doesn’t recognise, so it stopped before sharing anything from your account. Check that ${name} is signed in to the account with your paid plan, then try again. If it keeps happening, send us the error code.`,
   TEE_PROOF_FAILED: 'The proof could not be completed or checked. Return to Pines to check the saved result before retrying.',
   ISOLATION_REQUIRED: 'Chrome could not isolate the proof engine. Use desktop Chrome 141 or newer, reload the Pines extension, and retry.',
-  INELIGIBLE_PLAN: name === 'ChatGPT' ? 'This release verifies ChatGPT Plus, Pro, Pro Lite and Pro Max plans. Check your ChatGPT plan before retrying.' : name === 'Claude'
+  INELIGIBLE_PLAN: name === 'ChatGPT' ? 'Your ChatGPT plan can’t be verified. Pines accepts ChatGPT Plus, Pro, Pro Lite and Pro Max; Free and Go don’t qualify. Nothing from your account was shared.' : name === 'Claude'
     ? 'This release verifies paid personal Claude Pro and Max plans. Free, Team and Enterprise plans cannot be verified.'
     : 'This release verifies active SuperGrok and X Premium+ subscriptions. Free, X Basic and X Premium plans cannot be verified.',
   PROVIDER_INVENTORY_UNQUALIFIED: 'This release cannot safely verify the provider response. Update Pines Verifier before retrying.',
@@ -88,6 +88,7 @@ const helpFor = ({name, host, request}) => Object.freeze({
   SESSION_POLICY_UNSUPPORTED: 'This verification needs a newer Pines Verifier. Update the extension, then start again.',
   SESSION_POLICY_INVALID: 'Pines returned an invalid session time limit. Start a new verification.',
   WORKER_RESTARTED: 'The proof worker stopped. Pines can still check for a saved receipt. Return to Pines to retry.',
+  EXTENSION_STOPPED: 'The extension stopped before verification finished. Return to Pines to check for a saved receipt, then retry if none appears.',
   WORKER_UNAVAILABLE: 'The verification worker could not start. Reload the Pines extension and retry Verify from Pines.',
   EXTENSION_UNAVAILABLE: 'The extension could not finish this step. Reload the Pines extension in chrome://extensions, then retry Verify from Pines.',
   RECIPIENT_CHANGED: 'Your wallet changed. Start again with your current wallet.',
@@ -142,7 +143,7 @@ export function progressOf(state, now = Date.now()) {
     : state.phase === 'proving' ? 'Checking the proof…'
     : recovery ? 'Pines hasn’t confirmed it yet.' : 'Saving with Pines…';
   const title = bound ? 'Account already linked'
-    : stopped ? state.phase === 'cancelled' ? 'Verification cancelled' : 'Couldn’t verify'
+    : stopped ? state.phase === 'cancelled' ? 'Verification cancelled' : state.error === 'INELIGIBLE_PLAN' ? 'Plan not eligible' : 'Couldn’t verify'
     : complete ? 'You’re verified'
     : recovery ? 'Check your result in Pines'
     : `${name} verification`;
