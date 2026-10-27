@@ -891,7 +891,8 @@ export default {
     "qualification": {
       "chromeMajors": [
         154,
-        155
+        155,
+        156
       ],
       "existingSockets": true,
       "http3": true,

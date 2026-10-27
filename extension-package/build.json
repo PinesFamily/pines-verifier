@@ -891,7 +891,8 @@
     "qualification": {
       "chromeMajors": [
         154,
-        155
+        155,
+        156
       ],
       "existingSockets": true,
       "http3": true,
@@ -1259,11 +1260,11 @@
       "generation": "grok-email-20261026"
     }
   },
-  "sourceRevision": "6968ff284e90bad02394a7b39cbe96e8fc0434fb",
+  "sourceRevision": "e45bf42080c272d1863bb884dd34f9fee45bfa96",
   "sourceDirty": false,
   "publicRelease": {
     "format": "pines-private-headers-public-package-v2",
-    "version": "1.20.1",
+    "version": "1.20.2",
     "policySha256": "61262695cded026d31e23ffa7dc6bc764bd4a4c14e05d77b8f1817b8c723270b",
     "builtFromSource": true,
     "claimSigningEnabled": false
