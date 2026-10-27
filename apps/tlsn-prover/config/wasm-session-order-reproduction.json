@@ -1,0 +1,30 @@
+{
+  "format": "pines-wasm-session-order-reproduction-v1",
+  "upstreamCommit": "47aee45b53e06648c1b2ad3689b367b8c923fdec",
+  "patchSha256": "e0f956cde6a02ab201ca9b852ce04b87262e13030cbd87f7576750f481ce4e47",
+  "sessionPatchSha256": "e53dc5860d2a0769ae3fd399c8695c41e5760b67bfc8e596d82de9d79d0cdf5f",
+  "sessionSourceSha256": {
+    "crates/sdk-core/src/prover.rs": "52de98f578338417333ccd8619b747db14585aff0dcd6c30fd6dfd672aea1069",
+    "crates/wasm/src/prover/mod.rs": "aaef48e4afc6e88b51ae807934a5c94de54ce12c288b93f973945d88e70741f6"
+  },
+  "toolArchives": [
+    "278a8d668085821f4d1a637bd864f1713f872b0ae3a118c77562a308c0abfe8d",
+    "ceb6f0b9fea9d2868f258215a1d7f86a4c28330a0d64432cc7d53674618772d6",
+    "3dc677006555b355ea2da5e82602065a161d5e83eaefd3f759afa00b96e83212"
+  ],
+  "candidateBuildReportSha256": "d306de4351018ef8233280a697f4d1f1f36b819e359cd817c20e6ab68d9eef25",
+  "strictReproductionReportSha256": "a7aa69ec2bb6ceaf8c62820c6cbd6b88341d1ab40d2a3c16fb281890855c019d",
+  "freshBuilds": 2,
+  "filesIdentical": true,
+  "sameHostReproduction": true,
+  "files": {
+    "tlsn_wasm_bg.wasm": "005458529d7b8936632834b6d5746742417e0427c25f3aaab758f168cacb5de3",
+    "README.md": "6e0aac4e5ce2d64adedf891e5ebc34472898ab5a115ffe7868fc03d1569b71b0",
+    "spawn.js": "2da411c3ecb06b2d0f7d8bb6a1f65ab034ff5d414dbe4eda1e90d89d257ba01f",
+    "tlsn_wasm_bg.wasm.d.ts": "9f2a570aaab7b37472c03faf6b5a2cce1f5919979fbf4f32adcbdd338e7b687c",
+    "tlsn_wasm.js": "b689f04d84d6c3381243883a63daa3977cde6ada0add3a6cc0691ed18488524f",
+    "package.json": "c0b1238c9f6c44e1b6e5d33eaaeba5ec9b24cc2162315e4f706b7131ab048948",
+    "tlsn_wasm.d.ts": "d979431cd5983c5bb782ab5f6e79a0212ffd6020c2613f08837081504ac58493",
+    "snippets/web-spawn-05868593a72e2d44/js/spawn.js": "2da411c3ecb06b2d0f7d8bb6a1f65ab034ff5d414dbe4eda1e90d89d257ba01f"
+  }
+}

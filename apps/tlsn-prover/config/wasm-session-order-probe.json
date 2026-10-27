@@ -1,0 +1,163 @@
+{
+  "format": "pines-wasm-session-order-probe-v1",
+  "generatedOnly": true,
+  "providerContacted": false,
+  "hardwareQualified": false,
+  "chrome": "156.0.8078.47",
+  "wasmSha256": "005458529d7b8936632834b6d5746742417e0427c25f3aaab758f168cacb5de3",
+  "nativeSha256": "d6ecd80e0c74b002a2553301f89c59996f3f5d725e279a48192b3abbd3739d94",
+  "fullReportSha256": "101a1e49cc42f2c1ddb81b0b677e068b850b2403c7a7f7554c1729ea2848072f",
+  "probeSourceSha256": {
+    "apps/tlsn-prover/test/session-local.mjs": "a96c24b8a268da9e842bd02c3edbae63c7e2b69eb52b219009bb5f7d22ffe7be",
+    "apps/tlsn-prover/test/session-local-worker.js": "e0959946e2e37159b8908533318472e706f8ea5a010faa3b161ab5f09859ef73",
+    "apps/tlsn-prover/test/request-header-order.test.mjs": "607075c8219345f5e5cebd2425cb0e6214559176ae3be781a82b637571020a81"
+  },
+  "passed": true,
+  "canonicalRequestContentPreserved": true,
+  "cases": [
+    {
+      "name": "single-full-response",
+      "passed": true,
+      "nativeRetired": true,
+      "nativeVerified": true,
+      "connections": 1,
+      "pipelined": false,
+      "requestHiddenHeaderOrders": [
+        [
+          "user-agent",
+          "authorization"
+        ]
+      ],
+      "requestCanonicalSha256": [
+        "52a802a8eb5507f858eb376926cba38ee0eb7ec04dcfb219e1665f8e23091138"
+      ]
+    },
+    {
+      "name": "session-facts-chatgpt",
+      "passed": true,
+      "nativeRetired": true,
+      "nativeVerified": true,
+      "connections": 1,
+      "pipelined": false,
+      "requestHiddenHeaderOrders": [
+        [
+          "authorization",
+          "user-agent"
+        ],
+        [
+          "authorization",
+          "user-agent"
+        ]
+      ],
+      "requestCanonicalSha256": [
+        "bf4312e940529c2a9eebf2cf239325f6d252d70b4a2a7a226b34c05140ab07d2",
+        "832c32523c61f589f0700d81e3164e677761172f52881301417af893b67cab1f"
+      ]
+    },
+    {
+      "name": "session-origin-closes-early-refused",
+      "passed": true,
+      "nativeRetired": true,
+      "nativeVerified": false,
+      "connections": 1,
+      "pipelined": false,
+      "requestHiddenHeaderOrders": [
+        [
+          "authorization",
+          "user-agent"
+        ]
+      ],
+      "requestCanonicalSha256": [
+        "bf4312e940529c2a9eebf2cf239325f6d252d70b4a2a7a226b34c05140ab07d2"
+      ]
+    },
+    {
+      "name": "session-grok-email-order-0",
+      "passed": true,
+      "nativeRetired": true,
+      "nativeVerified": true,
+      "connections": 1,
+      "pipelined": false,
+      "requestHiddenHeaderOrders": [
+        [
+          "cookie",
+          "user-agent"
+        ],
+        [
+          "cookie",
+          "user-agent"
+        ]
+      ],
+      "requestCanonicalSha256": [
+        "0799cfbf9e9b7f6ff3e49916a2858093743a38c0f433184b91a4391b7bef1ee7",
+        "98f68b0462b188665bde2df52f054158c6a5b966562d43850e1a7eefa04341a1"
+      ]
+    },
+    {
+      "name": "session-grok-email-order-1",
+      "passed": true,
+      "nativeRetired": true,
+      "nativeVerified": true,
+      "connections": 1,
+      "pipelined": false,
+      "requestHiddenHeaderOrders": [
+        [
+          "cookie",
+          "user-agent"
+        ],
+        [
+          "cookie",
+          "user-agent"
+        ]
+      ],
+      "requestCanonicalSha256": [
+        "0799cfbf9e9b7f6ff3e49916a2858093743a38c0f433184b91a4391b7bef1ee7",
+        "98f68b0462b188665bde2df52f054158c6a5b966562d43850e1a7eefa04341a1"
+      ]
+    },
+    {
+      "name": "session-grok-email-order-2",
+      "passed": true,
+      "nativeRetired": true,
+      "nativeVerified": true,
+      "connections": 1,
+      "pipelined": false,
+      "requestHiddenHeaderOrders": [
+        [
+          "cookie",
+          "user-agent"
+        ],
+        [
+          "cookie",
+          "user-agent"
+        ]
+      ],
+      "requestCanonicalSha256": [
+        "0799cfbf9e9b7f6ff3e49916a2858093743a38c0f433184b91a4391b7bef1ee7",
+        "98f68b0462b188665bde2df52f054158c6a5b966562d43850e1a7eefa04341a1"
+      ]
+    },
+    {
+      "name": "session-grok-email-order-3",
+      "passed": true,
+      "nativeRetired": true,
+      "nativeVerified": true,
+      "connections": 1,
+      "pipelined": false,
+      "requestHiddenHeaderOrders": [
+        [
+          "cookie",
+          "user-agent"
+        ],
+        [
+          "cookie",
+          "user-agent"
+        ]
+      ],
+      "requestCanonicalSha256": [
+        "0799cfbf9e9b7f6ff3e49916a2858093743a38c0f433184b91a4391b7bef1ee7",
+        "98f68b0462b188665bde2df52f054158c6a5b966562d43850e1a7eefa04341a1"
+      ]
+    }
+  ]
+}

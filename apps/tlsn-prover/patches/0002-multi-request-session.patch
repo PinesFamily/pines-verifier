@@ -10,12 +10,14 @@ before the next request is written, so the transcript is req1 resp1 req2
 resp2 of one session. The caller's last request carries `connection: close`
 (the schema package builds it). Every response is returned. The prover is left
 `Committed`, exactly as after `send_request`, for the same `transcript()` and
-`reveal()`. Every request is built before the connection opens. Proxy mode
+`reveal()`. Every request is built before the connection opens. Multi-request headers are
+inserted in normalized name order after the existing validation, avoiding the
+independent HashMap order of each request. Header names and values are preserved. Proxy mode
 only; `server_io` must be omitted. `send_request`, the protocol, the
 commitments, the reveal and the verifier are untouched.
 
 diff --git a/crates/sdk-core/src/prover.rs b/crates/sdk-core/src/prover.rs
-index 4a0aff5e9..9856e525c 100644
+index 4a0aff5e..f84918a0 100644
 --- a/crates/sdk-core/src/prover.rs
 +++ b/crates/sdk-core/src/prover.rs
 @@ -305,6 +305,85 @@ impl SdkProver {
@@ -47,7 +49,7 @@ index 4a0aff5e9..9856e525c 100644
 +        // that cannot be built sends nothing.
 +        let requests = requests
 +            .into_iter()
-+            .map(hyper::Request::<Full<Bytes>>::try_from)
++            .map(canonical_session_request)
 +            .collect::<Result<Vec<_>>>()?;
 +
 +        let State::CommitAcceptedProxy { prover, handle } = self.state.take() else {
@@ -104,10 +106,28 @@ index 4a0aff5e9..9856e525c 100644
      fn build_tls_config(&self) -> Result<TlsClientConfig> {
          let mut builder = TlsClientConfig::builder()
              .server_name(ServerName::Dns(
-@@ -517,6 +596,64 @@ async fn send_request(conn: TlsConnection, request: HttpRequest) -> Result<HttpR
+@@ -517,6 +596,82 @@ async fn send_request(conn: TlsConnection, request: HttpRequest) -> Result<HttpR
      })
  }
  
++// HashMap iteration is independently randomized for each HttpRequest. Build and
++// validate with the existing conversion, then insert normalized header names in
++// a fixed order so every request in a session has consistent wire ordering.
++fn canonical_session_request(request: HttpRequest) -> Result<hyper::Request<Full<Bytes>>> {
++    let mut request = hyper::Request::<Full<Bytes>>::try_from(request)?;
++    let mut headers = request
++        .headers()
++        .iter()
++        .map(|(name, value)| (name.clone(), value.clone()))
++        .collect::<Vec<_>>();
++    headers.sort_by(|(left, _), (right, _)| left.as_str().cmp(right.as_str()));
++    request.headers_mut().clear();
++    for (name, value) in headers {
++        request.headers_mut().append(name, value);
++    }
++    Ok(request)
++}
++
 +/// Sends the requests in order on one HTTP/1.1 connection, without
 +/// pipelining: each response body is read to its end before the next request
 +/// is written.
@@ -170,7 +190,7 @@ index 4a0aff5e9..9856e525c 100644
  mod tests {
      use super::*;
 diff --git a/crates/wasm/src/prover/mod.rs b/crates/wasm/src/prover/mod.rs
-index 56bbb5769..d2d56367d 100644
+index 56bbb576..d2d56367 100644
 --- a/crates/wasm/src/prover/mod.rs
 +++ b/crates/wasm/src/prover/mod.rs
 @@ -117,6 +117,53 @@ impl JsProver {
