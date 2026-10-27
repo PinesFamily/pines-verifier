@@ -53,6 +53,7 @@ for p in sorted(set(paths)):
     manifest[str(rel)] = hashlib.sha256(p.read_bytes()).hexdigest()
 config_path=destination / 'tools/tee-native/hardware/image-config.json'
 image_config={'capabilityVersion':2,'profiles':['pines.'+provider+'.tee.native.nitro.v1' for provider in ['chatgpt','claude','grok']],'apiKey':api_key}
+image_config['profiles'].append('pines.grok.tee.native.nitro.v2')
 # Capacity is selected per boot by the pinned controller key (the capacity selection design). Only its
 # validators are sealed; a sealed selection would defeat that, so an authority file naming one is refused.
 if 'resourcePolicy' in public:

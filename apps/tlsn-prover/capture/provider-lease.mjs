@@ -64,6 +64,9 @@ export async function providerLease({browser, schema, owner, url, deadline, navi
       // Readiness only. Response values/body never leave this callback or become
       // evidence, and the admitted TLSN request independently authenticates them.
       const types = (d.responseHeaders ?? []).filter(header => header.name?.toLowerCase() === 'content-type');
+      if ((d.responseHeaders ?? []).some(header => header.name?.toLowerCase() === 'cf-mitigated' && header.value?.toLowerCase() === 'challenge')) {
+        fail('PROVIDER_CHALLENGE'); return;
+      }
       if (d.statusCode !== 200 || types.length !== 1 || !/^application\/json(?:\s*;|$)/i.test(types[0].value ?? '')) {
         fail([401, 403, 429].includes(d.statusCode) ? `PROVIDER_HTTP_${d.statusCode}` : 'PROVIDER_SIGN_IN_REQUIRED'); return;
       }

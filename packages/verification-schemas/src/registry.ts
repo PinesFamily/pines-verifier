@@ -8,6 +8,14 @@ import grok from "../schemas/grok-plan.v1.json" with { type: "json" };
 import chatgptPrivate from "../schemas/chatgpt-plan.v4.json" with { type: "json" };
 import claudeOrg from "../schemas/claude-plan.v2.json" with { type: "json" };
 import grokActive from "../schemas/grok-plan.v2.json" with { type: "json" };
+// The sybil-facts candidates (multi-exchange protocol §2, from qualified provider captures): the fact fields and a
+// second exchange per provider, on the facts-complete class (every response byte revealed to the measured enclave, the
+// request's credentials hidden as today). Candidates, no claims.
+import chatgptFacts from "../schemas/chatgpt-plan.v6.json" with { type: "json" };
+import claudeFacts from "../schemas/claude-plan.v4.json" with { type: "json" };
+import grokFacts from "../schemas/grok-plan.v4.json" with { type: "json" };
+import grokClearance from "../schemas/grok-plan.v5.json" with { type: "json" };
+import grokEmail from "../schemas/grok-plan.v6.json" with { type: "json" };
 import fixture from "../schemas/bringid-simple-fixture.v1.json" with { type: "json" };
 import publicFixture from "../schemas/httpbingo-fixture.v1.json" with { type: "json" };
 import privateFixture from "../schemas/httpbingo-private-fixture.v1.json" with { type: "json" };
@@ -17,7 +25,7 @@ import { parseSchema, schemaDigest } from "./schema.ts";
 import { requireThat } from "./errors.ts";
 import type { SchemaReference, VerificationSchema } from "./types.ts";
 
-export const schemaSources: readonly unknown[] = Object.freeze([chatgpt, fixture, publicFixture, privateFixture, chatgptClaims, chatgptIdentity, claude, grok, benchFixture, chatgptPrivate, claudeOrg, grokActive]);
+export const schemaSources: readonly unknown[] = Object.freeze([chatgpt, fixture, publicFixture, privateFixture, chatgptClaims, chatgptIdentity, claude, grok, benchFixture, chatgptPrivate, claudeOrg, grokActive, chatgptFacts, claudeFacts, grokFacts, grokClearance, grokEmail]);
 
 export async function createRegistry(sources: readonly unknown[], pins: readonly SchemaReference[]) {
   const schemas = new Map<string, Readonly<{ schema: VerificationSchema; reference: SchemaReference }>>();

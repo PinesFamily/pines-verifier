@@ -2,6 +2,9 @@
 // Pure and import-free: the bundled capture controller and proof worker share it. Nothing here persists,
 // logs or sends a value; a path parameter lives only inside the one in-memory replay.
 export const PRIVATE_HEADERS_POLICY_ID = 'private-headers-gzip-v1';
+export const GROK_CLEARANCE_POLICY_ID = 'grok-clearance-private-v1';
+export const privatePolicyForSchema = schema => schema?.schemaId === 'pines.grok.tee.native' && schema?.version === 5
+  ? GROK_CLEARANCE_POLICY_ID : PRIVATE_HEADERS_POLICY_ID;
 export const FULL_RESPONSE_POLICY_ID = 'full-response-v1';
 export const isPrivateHeadersSchema = schema => schema?.response?.privacy?.mode === 'private-headers-v1';
 export const policyIdOf = value => typeof value === 'string' ? value : typeof value?.id === 'string' ? value.id : null;

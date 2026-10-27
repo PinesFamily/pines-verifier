@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "qualified": true,
+  "source": "Derived from the October 5 inventory, with a narrow October 9 compatibility correction from the October 7 shape-preserving synthetic per-org replica (SHA-256 cf3c8cb7a831a254578abe1e02e62475ba7d42fe08a7c109924633626b430717). The original observationSha256 and observedAt remain provenance for the header names. No response values or new provider observation were retained by this correction.",
+  "observationSha256": "d9c401aae51ab1f0d0b779ccb36c85f2a198e8d231bb51af60775877ec3d5e49",
+  "observedAt": "2026-10-05T00:17:58.671Z",
+  "credentialResponseHeaders": [
+    "set-cookie"
+  ],
+  "review": "Header names only: the body is no longer held to an observed per-field shape. tools/tee-native/inventory.mjs refuses before reveal any response header name not listed here and any credential in the body, meaning a non-empty string under a credential-named key or a string in a known credential format. The complete body is disclosed only inside the measured enclave, and the schema's selector and checks judge every field a decision reads. Set-Cookie values remain hidden; HTTP/1.1 framing headers are allowed. This supersedes the October 9 correction that admitted six observed non-null Claude settings.",
+  "responseHeaders": [
+    "alt-svc",
+    "cf-cache-status",
+    "cf-ray",
+    "connection",
+    "content-encoding",
+    "content-length",
+    "content-type",
+    "date",
+    "priority",
+    "request-id",
+    "server",
+    "server-timing",
+    "set-cookie",
+    "strict-transport-security",
+    "transfer-encoding",
+    "vary",
+    "x-robots-tag"
+  ]
+}

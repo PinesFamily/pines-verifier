@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "qualified": true,
+  "source": "Chromium DevTools structure review of a signed-in session, 2026-10-05; complete headers and identity-encoded uncompressed response. Raw values never exported.",
+  "observationSha256": "414ae93e0929e90f4bb3fa3c0c78ae10dc776b911a110748e27b1b0e6c53e9d5",
+  "observedAt": "2026-10-05T00:18:01.711Z",
+  "credentialResponseHeaders": [
+    "set-cookie"
+  ],
+  "review": "Header names only: the body is no longer held to an observed per-field shape. tools/tee-native/inventory.mjs refuses before reveal any response header name not listed here and any credential in the body, meaning a non-empty string under a credential-named key or a string in a known credential format. The complete body is disclosed only inside the measured enclave, and the schema's selector and checks judge every field a decision reads. Set-Cookie values remain hidden; HTTP/1.1 framing headers are allowed.",
+  "responseHeaders": [
+    "alt-svc",
+    "cf-cache-status",
+    "cf-ray",
+    "connection",
+    "content-length",
+    "content-type",
+    "date",
+    "priority",
+    "server",
+    "server-timing",
+    "set-cookie",
+    "speculation-rules",
+    "strict-transport-security",
+    "transfer-encoding",
+    "vary",
+    "x-trace-id"
+  ]
+}

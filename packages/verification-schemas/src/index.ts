@@ -1,11 +1,13 @@
 export type * from "./types.ts";
 export { SchemaError } from "./errors.ts";
 export type { SchemaErrorCode } from "./errors.ts";
-export { parseSchema, requestUrl, requestTarget, schemaDigest, matchRequestTarget, instantiatePath, acceptEncoding, VISIBLE_RESPONSE_HEADERS } from "./schema.ts";
+export { parseSchema, requestUrl, requestTarget, schemaDigest, matchRequestTarget, instantiatePath, acceptEncoding, VISIBLE_RESPONSE_HEADERS, exchangeViews, captureHeaderNames, connectionHeader, MAX_EXCHANGES } from "./schema.ts";
+export type { ExchangeView } from "./schema.ts";
+export { messageBoundaries } from "./http.ts";
 export { loadRegistry, createRegistry } from "./registry.ts";
-export { prepareReplay, capturedFrom } from "./capture.ts";
+export { prepareReplay, prepareReplays, capturedFrom } from "./capture.ts";
 export type { ReplayOptions } from "./capture.ts";
-export { previewExchange, evaluateVerifiedExchange, deriveSubjectKey, rankClaudePersonalOrgs, isClaudePaidPersonalOrg, claudePaidPlan } from "./evaluate.ts";
+export { previewExchange, evaluateVerifiedExchange, inspectDisclosedRequests, inspectDisclosedResponses, transformValue, deriveSubjectKey, rankClaudePersonalOrgs, isClaudePaidPersonalOrg, claudePaidPlan } from "./evaluate.ts";
 export { gunzip, crc32, MAX_DECODED_RATIO } from "./gzip.ts";
 export { planDisclosure } from "./disclosure.ts";
 export { inspectDisclosedRequest } from "./redacted-request.ts";

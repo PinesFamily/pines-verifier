@@ -1,0 +1,129 @@
+{
+  "format": "pines-verification-schema-v1",
+  "schemaId": "pines.claude.plan",
+  "version": 2,
+  "providerId": "CLAUDE-PLAN",
+  "lifecycle": "candidate",
+  "request": {
+    "origin": "https://claude.ai",
+    "method": "GET",
+    "path": "/api/organizations/{org_uuid}",
+    "query": {},
+    "body": {
+      "kind": "empty"
+    },
+    "pathParams": {
+      "org_uuid": {
+        "kind": "lowercase-uuid-v1",
+        "bindsTo": "/uuid"
+      }
+    }
+  },
+  "capture": {
+    "navigationUrl": "https://claude.ai/new",
+    "authOrigins": [
+      "https://claude.ai"
+    ],
+    "headers": [
+      {
+        "name": "user-agent",
+        "required": true,
+        "secret": true,
+        "validation": "visible-ascii"
+      }
+    ],
+    "cookies": [
+      "sessionKey"
+    ],
+    "trigger": {
+      "pathPrefix": "/api/"
+    }
+  },
+  "replay": {
+    "transform": "fixed-request-v1",
+    "headers": {
+      "accept": "application/json"
+    }
+  },
+  "limits": {
+    "maxSentBytes": 8192,
+    "maxRecvBytes": 8192,
+    "maxHeaderBytes": 4096,
+    "maxBodyBytes": 3584,
+    "maxJsonDepth": 8,
+    "sessionTimeoutMs": 120000,
+    "maxRecvRecords": 64,
+    "concurrency": 1,
+    "maxDecodedBodyBytes": 12288,
+    "maxChunks": 16,
+    "maxRevealedRecvBytes": 4096,
+    "maxRevealedSentBytes": 1024
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "disclosure": "full-json-body",
+    "privacy": {
+      "mode": "private-headers-v1",
+      "visibleHeaders": [
+        "content-type",
+        "content-length",
+        "transfer-encoding",
+        "content-encoding"
+      ],
+      "encodings": [
+        "gzip",
+        "identity"
+      ]
+    }
+  },
+  "selector": {
+    "kind": "claude-paid-personal-org-single-v1"
+  },
+  "fields": [
+    {
+      "id": "organization_uuid",
+      "pointer": "/uuid",
+      "type": "string"
+    },
+    {
+      "id": "rate_limit_tier",
+      "pointer": "/rate_limit_tier",
+      "type": "string"
+    },
+    {
+      "id": "capabilities",
+      "pointer": "/capabilities",
+      "type": "array"
+    }
+  ],
+  "checks": [
+    {
+      "op": "custom",
+      "field": "organization_uuid",
+      "handler": "claude-org-uuid-v1"
+    },
+    {
+      "op": "custom",
+      "field": "rate_limit_tier",
+      "handler": "claude-paid-tier-v1"
+    },
+    {
+      "op": "custom",
+      "field": "capabilities",
+      "handler": "claude-paid-capabilities-v1"
+    }
+  ],
+  "identity": {
+    "version": "claude-org-v1",
+    "kind": "field",
+    "field": "organization_uuid"
+  },
+  "claims": {
+    "enabled": false,
+    "domain": "claude.ai",
+    "templateIds": [
+      "CLAUDE-PLAN"
+    ]
+  }
+}

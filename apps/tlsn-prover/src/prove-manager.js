@@ -13,21 +13,36 @@ const reviewFields = fields => fields !== null && typeof fields === 'object' && 
 
 export class ProveManager {
   #teeProviders;
+  #manifestRequired;
   #worker;
   #timer;
   #job;
   #changed;
   #replayMetadata;
-  constructor(changed, {teeProviders = null,replayMetadata = null} = {}) { this.#changed = changed; this.#teeProviders = teeProviders; this.#replayMetadata=replayMetadata; }
-  start({runId, attempt, recipient, deadline, verifierOrigin, tee = false, upfrontConsent, replay}) {
+  #assistanceProviders;
+  #assistanceManifestRequired;
+  // Admission comes from the selected manifest when that provider requires one.
+  // The proof worker independently verifies its signature and exact capability.
+  constructor(changed, {teeProviders = null,assistanceProviders = null,replayMetadata = null,manifestRequired = false,assistanceManifestRequired = false} = {}) {
+    this.#changed = changed; this.#teeProviders = teeProviders; this.#assistanceProviders = assistanceProviders;
+    this.#replayMetadata = replayMetadata; this.#manifestRequired = manifestRequired === true;
+    this.#assistanceManifestRequired = assistanceManifestRequired === true;
+  }
+  start({runId, attempt, recipient, deadline, verifierOrigin, tee = false, upfrontConsent, replay, admitted, manifest, extensionVersion, assisted}) {
     this.#expire();
     check(!this.#job || terminal(this.#job.phase), 'BUSY');
     // Native builds cannot fall back to the ordinary disclosure worker. The
     // selected provider is immutable for this run and resolved before spawning.
     check(!this.#teeProviders || tee === true, 'SCHEMA_UNAVAILABLE');
-    const provider = tee ? this.#teeProviders?.find(entry => entry.policy?.admissionEnabled
+    const requiresManifest = assisted === true ? this.#assistanceManifestRequired : this.#manifestRequired;
+    if (tee && requiresManifest) check(manifest, 'MANIFEST_REQUIRED');
+    const provider = tee ? (assisted === true ? this.#assistanceProviders : this.#teeProviders)?.find(entry => (requiresManifest || entry.policy?.admissionEnabled)
       && ['schemaId', 'version', 'digest'].every(key => entry.reference[key] === attempt?.schema?.[key])) : null;
     check(!tee || provider, 'SCHEMA_UNAVAILABLE');
+    if (tee && requiresManifest) check(Array.isArray(admitted), 'SCHEMA_UNAVAILABLE');
+    // The background's manifest-derived admission for this run, when it sent one; the worker is the gate and verifies
+    // the manifest itself again (MANIFEST_REQUIRED without one on a package that requires it).
+    if (tee && admitted !== undefined) check(Array.isArray(admitted) && admitted.some(ref => ['schemaId', 'version', 'digest'].every(key => ref?.[key] === attempt.schema[key])), 'SCHEMA_UNAVAILABLE');
     if (tee) check(upfrontConsent === UPFRONT_CONSENT_VERSION && replay, 'CONSENT_REQUIRED');
     if (tee) check(deadline === sessionSnapshot(attempt).sessionExpiresAt, 'SESSION_POLICY_INVALID');
     check(Number.isSafeInteger(deadline) && deadline > Date.now(), 'PROOF_TIMEOUT');
@@ -70,7 +85,7 @@ export class ProveManager {
       this.#changed(this.status());
     };
     this.#timer = setTimeout(() => finish('failed', 'PROOF_TIMEOUT'), Math.max(1, remaining));
-    worker.postMessage({type: 'start', runId, attempt, recipient, verifierOrigin, ...(tee ? {upfrontConsent, replay} : {})});
+    worker.postMessage({type: 'start', runId, attempt, recipient, verifierOrigin, ...(tee ? {upfrontConsent, replay, manifest, extensionVersion, ...(assisted === true ? {assisted: true} : {})} : {})});
     return this.status();
   }
   status(preview = false) { this.#expire(); return this.#job ? {runId: this.#job.runId, phase: this.#job.phase, error: this.#job.error, ...(preview && this.#job.preview ? {preview: this.#job.preview} : {})} : null; }

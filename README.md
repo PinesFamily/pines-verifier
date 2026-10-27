@@ -3,7 +3,8 @@
 Source and a reproducible build for the [AWS Nitro Enclave](https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html)
 in which Pines verifies a subscription proof. The enclave runs the [TLSNotary](https://tlsnotary.org) Proxy-mode verifier
 (`apps/tlsn-verifier`) and the schema checks (`tools/tee-native`, `packages/verification-schemas`). It is the only
-place that reads the provider's response; the Pines API and the host relay ciphertext.
+place that reads the provider's response. The host relays ciphertext; the API receives the signed result.
+For the Grok email check that result includes the confirmed address transiently, so the API can send an inbox code.
 
 The image can be rebuilt from this tree and compared with the PCR0/PCR1/PCR2 measurements that AWS's hardware signs.
 
@@ -26,14 +27,14 @@ Evidence you can fetch without a password:
 - This repository — the image's source and the script that rebuilds it (below), the provider schemas
   (`packages/verification-schemas`, the native profiles in `tools/tee-native/profile.mjs`), the strict response
   inventories (`tools/tee-native/hardware/*-inventory.json`), the measured policy the extension pins
-  (`tools/tee-native/hardware/policy.private-headers-public.json`) and the extension's sources (`apps/tlsn-prover`).
+  (`tools/tee-native/hardware/policy.private-headers-gm1026-qualified.json`) and the extension's sources (`apps/tlsn-prover`).
 
 How the pieces tie together: the extension refuses to disclose anything until an AWS-rooted Nitro attestation, fresh
 for this attempt and not in debug mode, carries exactly the PCRs in the release record below
 (`tools/tee-native/nitro.mjs`, `protocol.mjs`); rebuilding this tree yields those PCRs; so the code you read here is the
 code that reads your provider response. The extension package itself (Pines Verifier, id
-`lanmbpkmblcijblbllbikenpnceidmpj`) is published in the Chrome Web Store under that id, where the site's Install
-buttons lead, and served by the site as a ZIP for a manual install, identified by its SHA-256 in
+`lanmbpkmblcijblbllbikenpnceidmpj`) uses the same id as the Chrome Web Store listing. This release is offered as a ZIP on the site's
+install page, identified by its SHA-256 in
 [extension-package/README.md](extension-package/README.md); the store listing is uploaded separately, so its version can trail the package's. Its two binaries, the
 attestation validator and the TLSNotary prover, rebuild here byte for byte; the package as a whole does not yet.
 
@@ -45,15 +46,22 @@ the package was built and packaged from; this repository is a path-for-path expo
 extension sources follow the site-served ZIP's source snapshot, with the comment-only omissions described below.
 The version number is set by the release packaging, not by `apps/tlsn-prover/build.mjs`.
 
-The extension audit sources in this snapshot follow the site-served **1.19.0 ZIP** package's source commit
-`c56fafccbb2b775d3816d4b58020e3e72d7d8243`; its ZIP SHA-256 is
-`8667563d9fedfcc3e7fdd478f2db49f2281fac8e9ec39a5e9ff8eee2758693aa`. The Chrome Web Store serves the same version
-(the store's copy omits the manifest `key`); this source snapshot describes the site ZIP.
-Four internal comment attributions were removed from `client.d.mts`, `client.mjs`, `src/background.js` and
-`src/panel.js` under `apps/tlsn-prover`; executable source is unchanged by those omissions. This release moves to the
-signing-enclave world: a new verification image (the PCRs below), the policy that pins it, and the world artifact
-`contracts/deployments/production.json`. The historical claim-signing flag in the package's `build.json` describes
-packaging; claims in this world are signed by a separate signing enclave and published by the identity API.
+The extension audit sources in this snapshot follow the site-served **1.20.1 ZIP** package's source commit
+`6968ff284e90bad02394a7b39cbe96e8fc0434fb`; its ZIP SHA-256 is
+`4aed6869f5dcb1423fb8f7e14d70851dc33ab4ce11f755630a0ff03298daecf3`.
+The store upload is separate. Four internal comment attributions are removed from `client.d.mts`, `client.mjs`,
+`src/background.js` and `src/panel.js`; executable source is unchanged by those omissions.
+The historical claim-signing flag in `build.json` describes packaging; claims are signed by a separate signing
+enclave and published by the identity API.
+
+This release requires owner-signed primary and Grok companion manifests. Their routes and version floors are
+listed in `TRANSPARENCY.md`. The package's admission pins and provider behavior are separate from live service
+availability. The ordinary image replaces only its public ticket and controller keys; its exact older source is
+preserved under `measured-contexts/ordinary`. The separate two-request Grok email image is under
+`measured-contexts/email`. Each directory carries the original sealed manifest and every input byte, including
+the generated public image configuration and hash-pinned attestation validator. Source provenance and reproduced
+PCR/executable hashes are in `tools/tee-native/reproduce/gm1026/{ordinary,email}.json`.
+The source at the repository root supports extension review; use the explicit measured contexts to rebuild images.
 
 `id.pines.family/tee/health` is the API's own report of readiness and capacity, not signed evidence. The signed
 attestation reaches the extension with each verification, in the response to `/tee/admission`
@@ -65,33 +73,35 @@ Requirements: Linux x86_64, Docker with Buildx, Python 3, git, network access fo
 npm and Amazon Linux packages, about 25 GB of free disk. Every toolchain runs in a container pinned by digest.
 
 ```sh
-# Two clean builds; prints PCR0/PCR1/PCR2 and compares them with release.json.
-tools/tee-native/reproduce/enclave.sh /tmp/pines-enclave --nitro-image <tag built from Dockerfile.nitro-cli>
+# Two clean builds per image, checked against its sealed recovery release record.
+python3 tools/tee-native/reproduce/gm1026-enclave.py ordinary /tmp/pines-ordinary --nitro-image <nitro-toolchain-tag>
+python3 tools/tee-native/reproduce/gm1026-enclave.py email /tmp/pines-email --nitro-image <nitro-toolchain-tag>
 
 # The attestation validator WebAssembly the browser extension and the API load.
 tools/tee-native/reproduce/attestation-wasm.sh
 
-# Browser prover, including the awaited-write IO patch. Verifies every package byte.
+# Browser prover, with the awaited-write IO patch and the multi-request session patch. Verifies every package byte.
 # Install Rust nightly-2026-05-31 with rust-src and wasm32-unknown-unknown first.
 python3 tools/tee-native/reproduce/prover-wasm.py /tmp/pines-prover-wasm
 ```
 
-`enclave.sh` seals the build context with `tools/tee-native/prepare-image.py` (runtime inputs only; `--list` prints
-them), checks that its file set equals the release record, builds twice with `--no-cache` in a memory- and CPU-bounded
-BuildKit container and packages each image with `nitro-cli`. The EIF's own SHA-256 is not reproducible: Nitro writes
-build metadata into the file that PCRs do not cover. Compare PCRs, which is also what an attestation reports.
+`gm1026-enclave.py` checks every source byte against its sealed context and uses `local-image-pair.py` to build twice
+with `--no-cache` in a memory- and CPU-bounded BuildKit container. It packages each image with `nitro-cli`, then
+compares all three PCRs and executable hashes. The recorded Nitro toolchain digest is in each image's JSON record;
+a replacement built with `Dockerfile.nitro-cli` must reproduce PCR1. The EIF's own SHA-256 includes build metadata
+outside the PCRs, so compare PCRs and executable hashes. The older `release.json` and `enclave.sh` are historical.
 
 ## Release record
 
 | | |
 |---|---|
 | Source commit | `aab64b4ae7f4ac54286f10dc5011e0096d46a135` (build epoch `1792297388`) |
-| Enclave PCR0 | `cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa` |
+| Enclave PCR0 | `2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224` |
 | Enclave PCR1 | `4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493` |
-| Enclave PCR2 | `603a4d240b10cabc41f557bea8b9d3724a1d245da74acbb3358031b31215b9e9e538574ebafcaf337957244340b008ea` |
+| Enclave PCR2 | `e8330b01d8992ee72bebf6c17e815badcbf2af342d3ae15c1ecd37295506df52c1f53f5f5e2a3baa5d42d6adbdc957aa` |
 | Attestation validator | `pines_nitro_validation_bg.wasm` SHA-256 `dad876167a51019dcb81495552a48ca20da285487d3a9c2ead43aff288b224bf` |
 
-Live from the 2026-10-20 cutover: the migration verifier image (V) serves Pines on Base (chain 8453, revision tee-v5-20261012, trust policy version 3) on the Sydney parent beside the signing enclave (S). Two clean builds of aab64b4a reproduce every PCR and executable; the image was activated on hardware and passed the three direct provider claims and a sponsored claim before the cutover. The previous v5 image 1ea73f73 is retired with the old world.
+Prepared recovery release. Consult live identity discovery and the owner-signed manifest for activation. Ordinary provider proof and Grok email hardware transport passed; actual website acceptance is a separate completion criterion.
 
 ## TLSNotary and the vendored crates
 

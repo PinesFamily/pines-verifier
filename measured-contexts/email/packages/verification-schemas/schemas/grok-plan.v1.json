@@ -1,0 +1,106 @@
+{
+  "format": "pines-verification-schema-v1",
+  "schemaId": "pines.grok.plan",
+  "version": 1,
+  "providerId": "GROK-PLAN",
+  "lifecycle": "qualified",
+  "request": {
+    "origin": "https://grok.com",
+    "method": "GET",
+    "path": "/rest/subscriptions",
+    "query": {},
+    "body": {
+      "kind": "empty"
+    }
+  },
+  "capture": {
+    "navigationUrl": "https://grok.com/",
+    "authOrigins": [
+      "https://grok.com"
+    ],
+    "headers": [
+      {
+        "name": "user-agent",
+        "required": true,
+        "secret": true,
+        "validation": "visible-ascii"
+      }
+    ],
+    "cookies": [
+      "sso"
+    ],
+    "trigger": {
+      "pathPrefix": "/rest/"
+    }
+  },
+  "replay": {
+    "transform": "fixed-request-v1",
+    "headers": {
+      "accept": "application/json"
+    }
+  },
+  "limits": {
+    "maxSentBytes": 8192,
+    "maxRecvBytes": 65536,
+    "maxHeaderBytes": 8192,
+    "maxBodyBytes": 49152,
+    "maxJsonDepth": 32,
+    "sessionTimeoutMs": 120000,
+    "maxRecvRecords": 1024,
+    "concurrency": 1
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "disclosure": "full-json-body"
+  },
+  "selector": {
+    "kind": "grok-paid-subscription-v1"
+  },
+  "fields": [
+    {
+      "id": "xai_user_id",
+      "pointer": "/xaiUserId",
+      "type": "string"
+    },
+    {
+      "id": "tier",
+      "pointer": "/tier",
+      "type": "string"
+    },
+    {
+      "id": "status",
+      "pointer": "/status",
+      "type": "string"
+    }
+  ],
+  "checks": [
+    {
+      "op": "custom",
+      "field": "xai_user_id",
+      "handler": "grok-user-uuid-v1"
+    },
+    {
+      "op": "custom",
+      "field": "tier",
+      "handler": "grok-paid-tier-v1"
+    },
+    {
+      "op": "eq",
+      "field": "status",
+      "value": "SUBSCRIPTION_STATUS_ACTIVE"
+    }
+  ],
+  "identity": {
+    "version": "grok-user-v1",
+    "kind": "field",
+    "field": "xai_user_id"
+  },
+  "claims": {
+    "enabled": true,
+    "domain": "grok.com",
+    "templateIds": [
+      "GROK-PAGE"
+    ]
+  }
+}

@@ -1,11 +1,12 @@
 import config from './config.js';
 import {providerPermission} from './provider-permission.js';
+import {ROUTING_NOTICE, ROUTING_PERMISSION} from './grok-routing.mjs';
 import {loadRegistry} from './schemas/src/index.js';
 import {progressOf, stepsFor, failureHelp, failureDiagnostic, providerOf, receiptProgressOf, reviewRowsOf} from './progress.js';
 import {mountOrb} from './orb.js';
 import {retryCopy} from './retry.js';
 import {nativePlanLabel} from './tee-provider.mjs';
-import {teeCopy} from './consent-copy.mjs';
+import {teeCopy, disclosesEmail} from './consent-copy.mjs';
 
 // The side panel (Pines Verifier): the welcome screen while no verification runs in this window, and a run as three
 // task rows under the provider it checks, each opening onto what is happening inside it. It asks the background
@@ -59,7 +60,8 @@ function show(schemaId) {
   // The review is the second step's inside.
   node('progress').children[1].querySelector('.task-rows').replaceWith(disclosure);
   // Evaluated rows summarize the plan; what the TEE sees follows the build's disclosure policy (consent-copy.mjs).
-  node('sharing').textContent = tee ? tee.sharing : `The full response from ${host} is shared, including any email, names or billing IDs it contains. Review it below. Your outgoing login token and cookies stay hidden.`;
+  // A schema that discloses the e-mail fact adds the class's e-mail sentence (e-mail possession specification §8).
+  node('sharing').textContent = tee ? teeCopy(config.tee.disclosurePolicy, {email: disclosesEmail(entry.schema)}).sharing : `The full response from ${host} is shared, including any email, names or billing IDs it contains. Review it below. Your outgoing login token and cookies stay hidden.`;
   node('sharing').hidden = false;
   node('capture-start').textContent = `Open ${provider.name} and capture`;
 }
@@ -182,10 +184,14 @@ async function refresh() {
     runId = state.runId; show(state.schema?.schemaId); forRun(state.runId);
     view('run');
     const progress = progressOf(state);
+    node('assistance-notice').textContent = ROUTING_NOTICE;
+    node('assistance-notice').hidden = !state.assistanceNeeded;
+    node('allow-assistance').hidden = !(state.assistanceNeeded && state.phase === 'awaiting-assistance');
+    node('allow-assistance').disabled = busy;
     const receipt = receiptProgressOf(state);
     const running = !progress.stopped && !progress.complete && !progress.recovery;
     const retry = retryCopy(state);
-    node('heading').textContent = retry?.title ?? progress.title;
+    node('heading').textContent = state.assistanceNeeded ? 'Grok needs a browser check' : retry?.title ?? progress.title;
     node('description').textContent = retry?.description ?? progress.description;
     node('description').hidden = !(retry?.description ?? progress.description);
     const diagnostic = failureDiagnostic(state);
@@ -225,7 +231,8 @@ async function refresh() {
       null,
       [
         phase === 'proving' ? ['Checking the proof', 'running'] : phase === 'completed' ? ['Proof checked', 'done'] : ['Check the proof'],
-        progress.complete ? ['Saved with Pines', 'done'] : phase === 'completed' ? progress.recovery ? ['Saving with Pines', 'wait', 'not confirmed'] : ['Saving with Pines', 'running', `${receipt.seconds}s`] : ['Save with Pines'],
+        // A held result (the identity's e-mail challenge, reported by the page as `receipt-held`) waits on the code.
+        progress.complete ? ['Saved with Pines', 'done'] : phase === 'completed' ? state.receiptHeld ? ['Confirm on Pines', 'wait', 'code sent to your e-mail'] : progress.recovery ? ['Saving with Pines', 'wait', 'not confirmed'] : ['Saving with Pines', 'running', `${receipt.seconds}s`] : ['Save with Pines'],
       ],
     ];
     [...steps.children].forEach((item, index) => {
@@ -272,6 +279,16 @@ async function refresh() {
     else { panel.dataset.view = 'boot'; waitForWorker(); }
   }
 }
+node('allow-assistance').addEventListener('click', async () => {
+  if (!runId || busy) return;
+  const ownedRun = runId; actionError = undefined; busy = true; node('allow-assistance').disabled = true;
+  try {
+    const granted = await chrome.permissions.request(ROUTING_PERMISSION);
+    const result = await send('panel-assistance', {runId: ownedRun, granted, consentVersion: 1});
+    if (!result?.ok) actionError = failureHelp(result?.error, undefined, shown);
+  } catch {actionError = 'Assistance couldn’t start. Return to Pines to try the usual verification.';}
+  finally {busy = false; node('allow-assistance').disabled = false; void refresh();}
+});
 node('allow-access').addEventListener('click', async () => {
   if (!runId || busy) return;
   const ownedRun = runId, origin = providerPermission(shown);

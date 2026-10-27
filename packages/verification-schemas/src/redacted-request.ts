@@ -1,5 +1,5 @@
 import { requireThat } from "./errors.ts";
-import { acceptEncoding, matchRequestTarget } from "./schema.ts";
+import { acceptEncoding, connectionHeader, matchRequestTarget } from "./schema.ts";
 import { validateHeader } from "./capture.ts";
 import type { Range, VerificationSchema, VerifiedBytes } from "./types.ts";
 
@@ -10,6 +10,10 @@ export type RedactedHeader = Readonly<{ name: string; start: number; end: number
 export function inspectDisclosedRequest(
   schema: VerificationSchema,
   sent: VerifiedBytes,
+  // `false` for a request that keeps the TLS session open for a later exchange.
+  final = true,
+  // Filled, when given, with the request's public header values (the ones a binding may read).
+  publicOut?: Map<string, string>,
 ): readonly RedactedHeader[] {
   requireThat(schema.request.body.kind === "empty", "PRIVATE_REQUEST_UNSUPPORTED");
   // A cookie jar is one required, entirely opaque header — the schema's cookie names are not
@@ -63,7 +67,7 @@ export function inspectDisclosedRequest(
   const startLine = /^([A-Z]+) (\S+) HTTP\/1\.1$/.exec(publicLine(false));
   requireThat(startLine && startLine[1] === schema.request.method, "SCOPE_MISMATCH");
   matchRequestTarget(schema, startLine![2]!);
-  const fixed = { ...schema.replay.headers, host: new URL(schema.request.origin).host, "accept-encoding": acceptEncoding(schema), connection: "close" };
+  const fixed = { ...schema.replay.headers, host: new URL(schema.request.origin).host, "accept-encoding": acceptEncoding(schema), connection: connectionHeader(final) };
   const rules = new Map([...schema.capture.headers, ...cookieRule].map(rule => [rule.name, rule]));
   const allowed = new Set([...Object.keys(fixed), "content-length", ...rules.keys()]);
   const seen = new Set<string>(), publicHeaders = new Map<string, string>();
@@ -106,6 +110,7 @@ export function inspectDisclosedRequest(
     requireThat(revealedSent <= schema.limits.maxRevealedSentBytes, "REVEALED_LIMIT_EXCEEDED");
   }
   for (const [name, value] of Object.entries(fixed)) requireThat(publicHeaders.get(name) === value, "SCOPE_MISMATCH");
+  if (publicOut) for (const [name, value] of publicHeaders) publicOut.set(name, value);
   for (const rule of [...schema.capture.headers, ...cookieRule]) {
     requireThat(seen.has(rule.name) || !rule.required, "SCOPE_MISMATCH");
     if (!rule.secret && seen.has(rule.name)) requireThat(validateHeader(publicHeaders.get(rule.name)!, rule.validation), "SCOPE_MISMATCH");

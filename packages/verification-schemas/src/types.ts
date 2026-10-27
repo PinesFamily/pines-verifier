@@ -1,9 +1,45 @@
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type Scalar = null | boolean | number | string;
+// A closed, pure map from a provider's value to the canonical fact value the receipt
+// carries (identity policy specification §4 `FactSource.transform`). The source value is what
+// the checks judge; the transformed value is what lands in `values`. Unknown inputs refuse.
+export type FieldTransform = "iso-8601-seconds-v1" | "grok-billing-system-v1" | "claude-billing-type-v1";
 export type Field = Readonly<{
   id: string;
   pointer: string;
   type: "string" | "safe-integer" | "boolean" | "array";
+  // Optional, so every schema pinned before it existed keeps its exact digest.
+  transform?: FieldTransform;
+}>;
+export type CaptureHeader = Readonly<{
+  name: string;
+  required: boolean;
+  secret: boolean;
+  validation: "bearer" | "visible-ascii";
+}>;
+// How a later exchange is bound to the first one, judged inside the enclave:
+// `response-field`: the selected document's pointer equals the first exchange's identity value
+//   (server-asserted; sound in the pinned Proxy stack).
+// `credential`: every exchange was sent with the same hidden credential headers. The enclave
+//   sees hidden request bytes as zeros, so it judges the hidden SLOTS (same names, same shape);
+//   the browser's plaintext precheck judges the values. Value equality as evidence needs a
+//   TLSN plaintext hash commitment.
+// `request-header`: the later exchange's PUBLIC request header equals the first exchange's document pointer. For
+//   ChatGPT the server answers a foreign `chatgpt-account-id` with an empty history (capture record §1.1), so a history
+//   is the token's own view of that account; tying the header to the first exchange's echoed `account_id` makes the
+//   history the first exchange's account's.
+// `response-member`: some element of the later document's array at `pointer` has `field` equal to the first
+//   exchange's identity (Claude's `/api/account` memberships cover the proven organization, capture record §2).
+export type ExchangeBinding = Readonly<{ kind: "credential" }> | Readonly<{ kind: "response-field"; pointer: string }>
+  | Readonly<{ kind: "request-header"; header: string; pointer: string }> | Readonly<{ kind: "response-member"; pointer: string; field: string }>;
+// One further request/response pair in the SAME TLS session, after the first. Same origin,
+// GET, empty body, same captured credential; its own path, query, fields and checks.
+export type Exchange = Readonly<{
+  request: Readonly<{ path: string; query: Readonly<Record<string, string>>; headers: readonly CaptureHeader[] }>;
+  selector?: Selector;
+  fields: readonly Field[];
+  checks: readonly Check[];
+  binding: ExchangeBinding;
 }>;
 export type Check =
   | Readonly<{ op: "eq"; field: string; value: Scalar }>
@@ -18,6 +54,11 @@ export type CustomHandler =
 // `maxItems` is optional so every selector pinned before it existed keeps its exact digest.
 export type Selector =
   | Readonly<{ kind: "claude-paid-personal-org-v1" }>
+  // ChatGPT's plan-limit history (qualified provider captures §1): the earliest accepted-plan period's start,
+  // else `data_as_of`, and the usage bucket of the completed windows; synthesized as one small document.
+  | Readonly<{ kind: "chatgpt-plan-limit-history-v1" }>
+  // v2 adds the present billing object's name as `pines_billing_platform_source` (same capture, §3).
+  | Readonly<{ kind: "grok-paid-subscription-v2"; maxItems?: number }>
   // The per-org route answers one organization, so the list's "exactly one qualifies"
   // ambiguity check cannot apply; the same predicate judges that single object.
   | Readonly<{ kind: "claude-paid-personal-org-single-v1" }>
@@ -56,13 +97,11 @@ export type VerificationSchema = Readonly<{
   capture: Readonly<{
     navigationUrl: string;
     authOrigins: readonly string[];
-    headers: readonly Readonly<{
-      name: string;
-      required: boolean;
-      secret: boolean;
-      validation: "bearer" | "visible-ascii";
-    }>[];
+    headers: readonly CaptureHeader[];
     cookies: readonly string[];
+    // Allowed in addition to the mandatory cookies; absence never weakens the
+    // required-cookie check. The client applies any transport provenance gate.
+    optionalCookies?: readonly string[];
     // Cookie-authenticated providers: the credential is origin-wide, so it is taken from any
     // same-origin GET under this prefix that the page itself makes. The proven request is still
     // the fixed `request` above; only the cookie jar and schema headers cross into the replay.
@@ -98,6 +137,9 @@ export type VerificationSchema = Readonly<{
   checks: readonly Check[];
   identity: Readonly<{ version: string; kind: "legacy-plan-wallet" | "field"; field: string }>;
   claims: Readonly<{ enabled: boolean; domain: string; templateIds: readonly string[] }>;
+  // Optional, so every single-exchange schema keeps its exact digest. Ordered: the
+  // extension issues them after `request`, in this order, on the one TLS session.
+  exchanges?: readonly Exchange[];
 }>;
 
 export type SchemaReference = Readonly<{ schemaId: string; version: number; digest: string }>;

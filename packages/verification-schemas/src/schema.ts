@@ -1,6 +1,6 @@
 import { canonicalJson, pointerTokens } from "./json.ts";
 import { requireThat } from "./errors.ts";
-import type { VerificationSchema } from "./types.ts";
+import type { ExchangeBinding, VerificationSchema } from "./types.ts";
 
 type ObjectValue = Record<string, unknown>;
 function object(value: unknown, keys?: readonly string[]): ObjectValue {
@@ -51,12 +51,24 @@ const HANDLER_TYPES: Readonly<Record<string, string>> = Object.freeze(Object.ass
 // Each selector is written for one provider's response shape; it is never reusable elsewhere.
 const SELECTOR_ORIGINS: Readonly<Record<string, string>> = Object.freeze(Object.assign(Object.create(null), {
   "claude-paid-personal-org-v1": "https://claude.ai", "claude-paid-personal-org-single-v1": "https://claude.ai",
-  "grok-paid-subscription-v1": "https://grok.com",
+  "grok-paid-subscription-v1": "https://grok.com", "grok-paid-subscription-v2": "https://grok.com",
+  "chatgpt-plan-limit-history-v1": "https://chatgpt.com",
 }));
 // Only a selector that reads a bounded list can be given an item cap.
 const SELECTOR_MAX_ITEMS: Readonly<Record<string, number>> = Object.freeze(Object.assign(Object.create(null), {
-  "grok-paid-subscription-v1": 64,
+  "grok-paid-subscription-v1": 64, "grok-paid-subscription-v2": 64,
 }));
+
+// Each field transform reads one provider's value vocabulary, so it is bound to that
+// provider's origin exactly as a selector is; the generic one is origin-free.
+const TRANSFORM_TYPES: Readonly<Record<string, string>> = Object.freeze(Object.assign(Object.create(null), {
+  "iso-8601-seconds-v1": "string", "grok-billing-system-v1": "string", "claude-billing-type-v1": "string",
+}));
+const TRANSFORM_ORIGINS: Readonly<Record<string, string>> = Object.freeze(Object.assign(Object.create(null), {
+  "grok-billing-system-v1": "https://grok.com", "claude-billing-type-v1": "https://claude.ai",
+}));
+// At most this many request/response pairs in one TLS session (the first plus `exchanges`).
+export const MAX_EXCHANGES = 4;
 
 // Declared request path parameters. Each kind is a fixed-length, anchored pattern, so a
 // concrete target splits into literal text and parameter values with no ambiguity.
@@ -86,7 +98,9 @@ export function parseSchema(input: unknown): VerificationSchema {
   const parsed = JSON.parse(encoded) as unknown;
   // `selector` is optional so every schema pinned before it existed keeps its exact digest.
   const optional = parsed !== null && typeof parsed === "object" && Object.hasOwn(parsed, "selector") ? ["selector"] : [];
-  const value = object(parsed, ["format", "schemaId", "version", "providerId", "lifecycle", "request", "capture", "replay", "limits", "response", ...optional, "fields", "checks", "identity", "claims"]);
+  // `exchanges` is optional for the same reason: a single-exchange schema's bytes are untouched.
+  const hasExchanges = parsed !== null && typeof parsed === "object" && Object.hasOwn(parsed, "exchanges");
+  const value = object(parsed, ["format", "schemaId", "version", "providerId", "lifecycle", "request", "capture", "replay", "limits", "response", ...optional, "fields", "checks", "identity", "claims", ...(hasExchanges ? ["exchanges"] : [])]);
   requireThat(value.format === "pines-verification-schema-v1", "INVALID_SCHEMA");
   string(value.schemaId, /^[a-z][a-z0-9.-]{0,95}$/);
   integer(value.version);
@@ -128,7 +142,7 @@ export function parseSchema(input: unknown): VerificationSchema {
   if (body.kind === "empty") object(body, ["kind"]);
   else { requireThat(body.kind === "json" && request.method === "POST", "INVALID_SCHEMA"); object(body, ["kind", "value"]); }
 
-  const capture = object(value.capture, ["navigationUrl", "authOrigins", "headers", "cookies", ...(Object.hasOwn(Object(value.capture), "trigger") ? ["trigger"] : [])]);
+  const capture = object(value.capture, ["navigationUrl", "authOrigins", "headers", "cookies", ...(Object.hasOwn(Object(value.capture), "trigger") ? ["trigger"] : []), ...(Object.hasOwn(Object(value.capture), "optionalCookies") ? ["optionalCookies"] : [])]);
   const origins = uniqueStrings(capture.authOrigins).map(httpsOrigin);
   requireThat(origins.includes(origin), "INVALID_SCHEMA");
   string(capture.navigationUrl);
@@ -136,16 +150,13 @@ export function parseSchema(input: unknown): VerificationSchema {
   try { navigation = new URL(capture.navigationUrl); } catch { requireThat(false, "INVALID_SCHEMA"); }
   requireThat(origins.includes(navigation.origin) && !navigation.username && !navigation.password, "INVALID_SCHEMA");
   const names = new Set<string>();
-  for (const entry of list(capture.headers)) {
-    const header = object(entry, ["name", "required", "secret", "validation"]);
-    string(header.name, /^[a-z][a-z0-9-]*$/);
-    requireThat(!/^(?:host|connection|content-length|content-type|transfer-encoding|accept-encoding|cookie|proxy-.*)$/.test(header.name), "INVALID_SCHEMA");
-    requireThat(!names.has(header.name), "INVALID_SCHEMA"); names.add(header.name);
-    requireThat(typeof header.required === "boolean" && typeof header.secret === "boolean", "INVALID_SCHEMA");
-    requireThat(header.validation === "bearer" || header.validation === "visible-ascii", "INVALID_SCHEMA");
-    if (header.name === "authorization") requireThat(header.secret === true && header.required === true && header.validation === "bearer", "INVALID_SCHEMA");
-  }
+  parseCaptureHeaders(capture.headers, names);
   const cookies = uniqueStrings(capture.cookies, /^[a-zA-Z0-9_.-]+$/);
+  if (Object.hasOwn(capture, "optionalCookies")) {
+    const optional = uniqueStrings(capture.optionalCookies, /^[a-zA-Z0-9_.-]+$/);
+    requireThat(cookies.length > 0 && optional.length > 0 && optional.length <= 4
+      && optional.every(name => !cookies.includes(name)), "INVALID_SCHEMA");
+  }
   if (Object.hasOwn(capture, "trigger")) {
     // A trigger only makes sense for an origin-wide credential: a cookie jar and no Authorization,
     // which is request-scoped and would have to come from the proven request itself.
@@ -196,28 +207,120 @@ export function parseSchema(input: unknown): VerificationSchema {
     const encodings = uniqueStrings(privacy.encodings, /^[a-z]+$/);
     requireThat(ENCODING_SETS.some(set => set.length === encodings.length && set.every((name, index) => name === encodings[index])), "INVALID_SCHEMA");
   }
-  if (optional.length) {
-    // `maxItems` is optional for the same reason the selector itself is.
-    const hasMaxItems = Object.hasOwn(Object(value.selector), "maxItems");
-    const selector = object(value.selector, ["kind", ...(hasMaxItems ? ["maxItems"] : [])]);
-    requireThat(SELECTOR_ORIGINS[String(selector.kind)] !== undefined && SELECTOR_ORIGINS[String(selector.kind)] === request.origin, "INVALID_SCHEMA");
-    if (hasMaxItems) {
-      const ceiling = SELECTOR_MAX_ITEMS[String(selector.kind)];
-      requireThat(ceiling !== undefined, "INVALID_SCHEMA");
-      integer(selector.maxItems);
-      requireThat(Number(selector.maxItems) <= ceiling!, "INVALID_SCHEMA");
+  if (optional.length) parseSelector(value.selector, origin);
+  // Field ids are unique across the first exchange and every later one: all of them land
+  // in one `values` object on one receipt.
+  const allFields = new Set<string>();
+  const fields = parseFieldsAndChecks(value.fields, value.checks, origin, allFields);
+  const identity = object(value.identity, ["version", "kind", "field"]);
+  string(identity.version, /^[a-z][a-z0-9-]{0,95}$/); string(identity.field);
+  requireThat(["string", "safe-integer"].includes(String(fields.get(identity.field)?.type)), "INVALID_SCHEMA");
+  // The subject is the provider's own identifier, never a transformed value.
+  requireThat(!Object.hasOwn(fields.get(identity.field)!, "transform"), "INVALID_SCHEMA");
+  requireThat(identity.kind === "field" || identity.kind === "legacy-plan-wallet", "INVALID_SCHEMA");
+  if (identity.kind === "legacy-plan-wallet") {
+    requireThat(value.providerId === "CHATGPT-SUBSCRIPTION" && identity.version === "legacy-plan-wallet-v1" && fields.get(identity.field)?.pointer === "/plan_type", "INVALID_SCHEMA");
+  }
+  const claims = object(value.claims, ["enabled", "domain", "templateIds"]);
+  requireThat(typeof claims.enabled === "boolean" && claims.enabled === (value.lifecycle === "qualified"), "INVALID_SCHEMA");
+  string(claims.domain, /^[a-z0-9.-]+$/); uniqueStrings(claims.templateIds, /^[A-Z][A-Z0-9-]*$/);
+  if (value.lifecycle === "fixture") requireThat((claims.templateIds as unknown[]).length === 0, "INVALID_SCHEMA");
+  if (claims.enabled) requireThat((claims.templateIds as unknown[]).length > 0, "INVALID_SCHEMA");
+  if (identity.kind === "legacy-plan-wallet") requireThat(claims.domain === "chatgpt.com" && request.origin === "https://chatgpt.com", "INVALID_SCHEMA");
+  if (hasExchanges) {
+    // Later exchanges ride the same TLS session as the first: same origin and method, no
+    // body, the same captured credential. Each has its own path, query, fields and checks.
+    const exchanges = list(value.exchanges);
+    requireThat(exchanges.length >= 1 && exchanges.length + 1 <= MAX_EXCHANGES, "INVALID_SCHEMA");
+    // The first request may be a template (Claude's per-org route); later paths are literals.
+    requireThat(request.method === "GET" && body.kind === "empty", "INVALID_SCHEMA");
+    const replayHeaders = object(replay.headers);
+    for (const entry of exchanges) {
+      const hasSelector = Object.hasOwn(Object(entry), "selector");
+      const exchange = object(entry, ["request", ...(hasSelector ? ["selector"] : []), "fields", "checks", "binding"]);
+      const later = object(exchange.request, ["path", "query", "headers"]);
+      string(later.path, /^\/[\x21-\x7e]*$/);
+      requireThat(!/[?#{}]/.test(later.path) && new URL(origin + later.path).pathname === later.path, "INVALID_SCHEMA");
+      const laterQuery = object(later.query);
+      for (const [key, v] of Object.entries(laterQuery)) { string(key); requireThat(typeof v === "string", "INVALID_SCHEMA"); }
+      // Exchange-only headers (a provider's per-route selector header, say) join the
+      // capture's for that exchange alone; the names stay distinct from the shared ones.
+      const laterNames = new Set(names);
+      parseCaptureHeaders(later.headers, laterNames);
+      for (const name of laterNames) requireThat(!Object.hasOwn(replayHeaders, name), "INVALID_SCHEMA");
+      if (hasSelector) parseSelector(exchange.selector, origin);
+      parseFieldsAndChecks(exchange.fields, exchange.checks, origin, allFields);
+      const binding = object(exchange.binding);
+      if (binding.kind === "credential") {
+        object(binding, ["kind"]);
+        // There must be a credential to bind: a hidden header or the cookie jar.
+        requireThat(cookies.length > 0 || (capture.headers as { secret: boolean }[]).some(h => h.secret), "INVALID_SCHEMA");
+      } else if (binding.kind === "request-header") {
+        object(binding, ["kind", "header", "pointer"]);
+        // A public header of the later request (declared, never secret) against a field of the first document.
+        string(binding.header, /^[a-z][a-z0-9-]*$/);
+        const rule = [...(capture.headers as { name: string; secret: boolean }[]), ...(later.headers as { name: string; secret: boolean }[])].find(h => h.name === binding.header);
+        requireThat(rule !== undefined && rule.secret === false, "INVALID_SCHEMA");
+        string(binding.pointer); pointerTokens(binding.pointer);
+        requireThat(binding.pointer !== "", "INVALID_SCHEMA");
+      } else if (binding.kind === "response-member") {
+        object(binding, ["kind", "pointer", "field"]);
+        requireThat(identity.kind === "field", "INVALID_SCHEMA");
+        string(binding.pointer); pointerTokens(binding.pointer); string(binding.field); pointerTokens(binding.field);
+        requireThat(binding.pointer !== "" && binding.field !== "", "INVALID_SCHEMA");
+      } else {
+        object(binding, ["kind", "pointer"]);
+        requireThat(binding.kind === "response-field" && identity.kind === "field", "INVALID_SCHEMA");
+        string(binding.pointer); pointerTokens(binding.pointer);
+        requireThat(binding.pointer !== "", "INVALID_SCHEMA");
+      }
     }
   }
+  return freeze(value) as VerificationSchema;
+}
+
+function parseCaptureHeaders(value: unknown, names: Set<string>): void {
+  for (const entry of list(value)) {
+    const header = object(entry, ["name", "required", "secret", "validation"]);
+    string(header.name, /^[a-z][a-z0-9-]*$/);
+    requireThat(!/^(?:host|connection|content-length|content-type|transfer-encoding|accept-encoding|cookie|proxy-.*)$/.test(header.name), "INVALID_SCHEMA");
+    requireThat(!names.has(header.name), "INVALID_SCHEMA"); names.add(header.name);
+    requireThat(typeof header.required === "boolean" && typeof header.secret === "boolean", "INVALID_SCHEMA");
+    requireThat(header.validation === "bearer" || header.validation === "visible-ascii", "INVALID_SCHEMA");
+    if (header.name === "authorization") requireThat(header.secret === true && header.required === true && header.validation === "bearer", "INVALID_SCHEMA");
+  }
+}
+function parseSelector(value: unknown, origin: string): void {
+  // `maxItems` is optional for the same reason the selector itself is.
+  const hasMaxItems = Object.hasOwn(Object(value), "maxItems");
+  const selector = object(value, ["kind", ...(hasMaxItems ? ["maxItems"] : [])]);
+  requireThat(SELECTOR_ORIGINS[String(selector.kind)] !== undefined && SELECTOR_ORIGINS[String(selector.kind)] === origin, "INVALID_SCHEMA");
+  if (hasMaxItems) {
+    const ceiling = SELECTOR_MAX_ITEMS[String(selector.kind)];
+    requireThat(ceiling !== undefined, "INVALID_SCHEMA");
+    integer(selector.maxItems);
+    requireThat(Number(selector.maxItems) <= ceiling!, "INVALID_SCHEMA");
+  }
+}
+function parseFieldsAndChecks(fieldsValue: unknown, checksValue: unknown, origin: string, allFields: Set<string>): Map<string, ObjectValue> {
   const fields = new Map<string, ObjectValue>();
-  for (const entry of list(value.fields)) {
-    const field = object(entry, ["id", "pointer", "type"]);
+  for (const entry of list(fieldsValue)) {
+    // `transform` is optional so every schema pinned before it existed keeps its exact digest.
+    const hasTransform = Object.hasOwn(Object(entry), "transform");
+    const field = object(entry, ["id", "pointer", "type", ...(hasTransform ? ["transform"] : [])]);
     string(field.id, /^[a-z][a-zA-Z0-9_]{0,63}$/);
     string(field.pointer); pointerTokens(field.pointer);
     requireThat(["string", "safe-integer", "boolean", "array"].includes(String(field.type)), "INVALID_SCHEMA");
-    requireThat(!fields.has(field.id), "INVALID_SCHEMA"); fields.set(field.id, field);
+    if (hasTransform) {
+      const sourceType = TRANSFORM_TYPES[String(field.transform)];
+      requireThat(sourceType !== undefined && field.type === sourceType, "INVALID_SCHEMA");
+      const bound = TRANSFORM_ORIGINS[String(field.transform)];
+      requireThat(bound === undefined || bound === origin, "INVALID_SCHEMA");
+    }
+    requireThat(!fields.has(field.id) && !allFields.has(field.id), "INVALID_SCHEMA"); fields.set(field.id, field); allFields.add(field.id);
   }
   requireThat(fields.size > 0, "INVALID_SCHEMA");
-  for (const entry of list(value.checks)) {
+  for (const entry of list(checksValue)) {
     const check = object(entry);
     string(check.field); const field = fields.get(check.field);
     requireThat(field, "INVALID_SCHEMA");
@@ -239,20 +342,37 @@ export function parseSchema(input: unknown): VerificationSchema {
       requireThat(check.op === "array-length-gte" ? field.type === "array" && Number(check.value) >= 0 : field.type === "safe-integer", "INVALID_SCHEMA");
     }
   }
-  const identity = object(value.identity, ["version", "kind", "field"]);
-  string(identity.version, /^[a-z][a-z0-9-]{0,95}$/); string(identity.field);
-  requireThat(["string", "safe-integer"].includes(String(fields.get(identity.field)?.type)), "INVALID_SCHEMA");
-  requireThat(identity.kind === "field" || identity.kind === "legacy-plan-wallet", "INVALID_SCHEMA");
-  if (identity.kind === "legacy-plan-wallet") {
-    requireThat(value.providerId === "CHATGPT-SUBSCRIPTION" && identity.version === "legacy-plan-wallet-v1" && fields.get(identity.field)?.pointer === "/plan_type", "INVALID_SCHEMA");
-  }
-  const claims = object(value.claims, ["enabled", "domain", "templateIds"]);
-  requireThat(typeof claims.enabled === "boolean" && claims.enabled === (value.lifecycle === "qualified"), "INVALID_SCHEMA");
-  string(claims.domain, /^[a-z0-9.-]+$/); uniqueStrings(claims.templateIds, /^[A-Z][A-Z0-9-]*$/);
-  if (value.lifecycle === "fixture") requireThat((claims.templateIds as unknown[]).length === 0, "INVALID_SCHEMA");
-  if (claims.enabled) requireThat((claims.templateIds as unknown[]).length > 0, "INVALID_SCHEMA");
-  if (identity.kind === "legacy-plan-wallet") requireThat(claims.domain === "chatgpt.com" && request.origin === "https://chatgpt.com", "INVALID_SCHEMA");
-  return freeze(value) as VerificationSchema;
+  return fields;
+}
+
+/**
+ * The ordered exchanges of a schema as views: index 0 is the schema itself; a later one is
+ * the same schema with that exchange's request, headers, selector, fields and checks in
+ * place, and no `exchanges`. Every matcher, validator and inspector written for one
+ * exchange works unchanged on a view, so a later exchange is judged by exactly the code
+ * that judges the first. `final` is whether the request closes the TLS session.
+ */
+export type ExchangeView = Readonly<{ schema: VerificationSchema; index: number; final: boolean; binding?: ExchangeBinding }>;
+export function exchangeViews(schema: VerificationSchema): readonly ExchangeView[] {
+  const later = schema.exchanges ?? [];
+  const views: ExchangeView[] = [Object.freeze({ schema, index: 0, final: later.length === 0 })];
+  later.forEach((exchange, offset) => {
+    const { exchanges: _exchanges, selector: _selector, ...rest } = schema;
+    const view: VerificationSchema = freeze({
+      ...rest,
+      request: { origin: schema.request.origin, method: schema.request.method, path: exchange.request.path, query: exchange.request.query, body: schema.request.body },
+      capture: { ...schema.capture, headers: [...schema.capture.headers, ...exchange.request.headers] },
+      ...(exchange.selector ? { selector: exchange.selector } : {}),
+      fields: exchange.fields,
+      checks: exchange.checks,
+    });
+    views.push(Object.freeze({ schema: view, index: offset + 1, final: offset === later.length - 1, binding: exchange.binding }));
+  });
+  return Object.freeze(views);
+}
+/** The header-name allowlist a capture keeps for every exchange, so a later exchange's own header survives the capture. */
+export function captureHeaderNames(schema: VerificationSchema): readonly string[] {
+  return Object.freeze([...new Set([...schema.capture.headers, ...(schema.exchanges ?? []).flatMap(exchange => exchange.request.headers)].map(rule => rule.name))]);
 }
 
 function querySuffix(schema: VerificationSchema): string {
@@ -324,6 +444,9 @@ export function matchRequestTarget(schema: VerificationSchema, target: string): 
 export function acceptEncoding(schema: VerificationSchema): "gzip" | "identity" {
   return schema.response.privacy?.encodings.includes("gzip") ? "gzip" : "identity";
 }
+
+/** The one request header that differs between exchanges of a session: only the last closes it. */
+export const connectionHeader = (final: boolean): "close" | "keep-alive" => final ? "close" : "keep-alive";
 
 export function requestTarget(schema: VerificationSchema, pathParams?: Readonly<Record<string, string>>): string {
   return instantiatePath(schema, pathParams) + querySuffix(schema);

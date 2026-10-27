@@ -104,7 +104,8 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
     catch (error) { throw Object.assign(Error(/^[A-Z_]{1,64}$/.test(error?.message ?? '') ? error.message : 'NETWORK_ERROR'), {transient: true}); }
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      const code = typeof body?.error === 'string' && /^[A-Z_]{1,64}$/.test(body.error) ? body.error : `API_${response.status}`;
+      // Lower-case codes are the identity's sybil-policy refusals (packages/verification-schemas/src/sybil/refusals.ts).
+      const code = typeof body?.error === 'string' && /^[A-Za-z_]{1,64}$/.test(body.error) ? body.error : `API_${response.status}`;
       // Relative delay avoids a wrong countdown when the user's clock differs from the server.
       const delay = body?.retryAfterSeconds;
       const retryAt = Number.isSafeInteger(delay) && delay > 0 && delay <= 3600 ? now() + delay * 1000 : retryTime(body?.retryAt, now());
@@ -113,7 +114,9 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
     return response.json();
   };
   const assignedRouting = value => configuration?.attemptRouting?.includes?.('assigned') === true && Array.isArray(value?.routing) && value.routing.includes('assigned');
-  const claimableSchema = schema => configuration?.tee ? Boolean(teeProviderFor(configuration.tee, schema, true))
+  const capabilityFor = schema => teeProviderFor(configuration?.grokAssistance?.tee, schema, true)
+    ? configuration.grokAssistance.tee : configuration?.tee;
+  const claimableSchema = schema => configuration?.tee ? Boolean(teeProviderFor(capabilityFor(schema), schema, true))
     : claimableSchemas.includes(`${schema?.schemaId}@${schema?.version}`);
   const checkStatus = (handle, value) => {
     if (value.attemptId !== handle.attempt.attemptId || value.recipient !== handle.recipient || value.mode !== 'Proxy' || typeof value.claimable !== 'boolean' || (value.claimable && (!configuration?.claimable || !claimableSchema(value.schema) || value.status !== 'verified')) || !sameSchema(value.schema, handle.attempt.schema)) throw Error('RECEIPT_CONTEXT_MISMATCH');
@@ -122,8 +125,8 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
     const expectedRevision = handle.attempt.verifier?.revision ?? (handle.attempt.routing === 'pinned' ? configuration?.verifierRevision : undefined);
     if (configuration && (value.engine !== 'tlsn' || value.application !== application || value.chainId !== chainId || typeof value.verifierRevision !== 'string' || !revisionPattern.test(value.verifierRevision) || (expectedRevision !== undefined && value.verifierRevision !== expectedRevision))) throw Error('RECEIPT_CONTEXT_MISMATCH');
     if (configuration?.tee) {
-      const provider = teeProviderFor(configuration.tee, handle.attempt.schema, true);
-      if (!provider || value.executionProfile !== provider.profile || value.verificationEpoch !== configuration.tee.verificationEpoch) throw Error('RECEIPT_CONTEXT_MISMATCH');
+      const capability = capabilityFor(handle.attempt.schema), provider = teeProviderFor(capability, handle.attempt.schema, true);
+      if (!provider || value.executionProfile !== provider.profile || value.verificationEpoch !== capability.verificationEpoch) throw Error('RECEIPT_CONTEXT_MISMATCH');
     }
     if (value.linkedWallet !== undefined && (value.status !== 'failed' || !linkedWalletOf(value))) throw Error('RECEIPT_CONTEXT_MISMATCH');
     if (value.cancelRequested !== undefined && typeof value.cancelRequested !== 'boolean') throw Error('RECEIPT_CONTEXT_MISMATCH');
@@ -171,11 +174,11 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
         || !hasEnabledSchema)) throw Error(routing === 'pinned' && configuration.attemptRouting?.includes?.('assigned') ? 'EXTENSION_UPDATE_REQUIRED' : 'EXTENSION_VERSION_MISMATCH');
       return {...value, routingMode: routing};
     },
-    async start(recipient, schemaId = 'pines.fixture.httpbingo', {signal, onAttempt = () => {}, isCurrent = () => true, onPreparation = () => {}} = {}) {
+    async start(recipient, schemaId = 'pines.fixture.httpbingo', {signal, onAttempt = () => {}, isCurrent = () => true, onPreparation = () => {}, requireGrokEmail = false} = {}) {
       if (typeof recipient !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(recipient) || recipient === '0x' + '0'.repeat(40)) throw Error('INVALID_RECIPIENT');
       recipient = recipient.toLowerCase();
       const capabilities = await client.capabilities();
-      const schema = capabilities.schemas.find(schema => schema.schemaId === schemaId && (!configuration || configuration.schemas.some(enabled => sameSchema(enabled, schema))));
+      let schema = capabilities.schemas.find(schema => schema.schemaId === schemaId && (!configuration || configuration.schemas.some(enabled => sameSchema(enabled, schema))));
       if (!schema) throw Error('SCHEMA_UNAVAILABLE');
       if (configuration?.tee && (capabilities.upfrontConsent !== UPFRONT_CONSENT_VERSION || !capabilities.prepareProvider)) throw Error('EXTENSION_UPDATE_REQUIRED');
       if (signal?.aborted) throw Error('CANCELLED');
@@ -191,8 +194,13 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
       const current = () => {if (signal?.aborted) throw Error('CANCELLED'); if (!isCurrent()) throw Error('RECIPIENT_CHANGED');};
       current();
       let preparation, executionId;
+      const assistanceSupported = schemaId === 'pines.grok.tee.native' && capabilities.grokAssistance?.version === 1
+        && configuration?.grokAssistance?.version === 1 && configuration.grokAssistance.enabled === true
+        && sameSchema(capabilities.grokAssistance.schema, configuration.grokAssistance.schema)
+        && sameTeeCapability(capabilities.grokAssistance.tee, configuration.grokAssistance.tee);
+      if (requireGrokEmail && (schemaId !== 'pines.grok.tee.native' || !assistanceSupported || capabilities.grokAssistance.schema.version !== 6)) throw Error('EXTENSION_UPDATE_REQUIRED');
       if (capabilities.prepareProvider) {
-        preparation = await message('prepare-provider', {recipient, schema});
+        preparation = await message('prepare-provider', {recipient, schema, ...(assistanceSupported ? {grokAssistance: requireGrokEmail ? 2 : 1} : {})});
         try {
           while (!preparation.preparationReady) {
             current(); onPreparation(preparation);
@@ -201,6 +209,11 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
             preparation = await message('preparation-status', {runId: preparation.runId, recipient});
           }
           current(); onPreparation(preparation);
+          if (preparation.assistedAttempt) {
+            if (!assistanceSupported || !sameSchema(preparation.assistedAttempt.schema, capabilities.grokAssistance.schema)) throw Error('ATTEMPT_MISMATCH');
+            schema = capabilities.grokAssistance.schema;
+          }
+          if (requireGrokEmail && !preparation.assistedAttempt) throw Error('ATTEMPT_MISMATCH');
           if (capabilities.upfrontConsent === UPFRONT_CONSENT_VERSION) {
             ({executionId} = await message('claim-preparation', {runId: preparation.runId, recipient}));
             if (!uuid.test(executionId)) throw Error('CONSENT_REQUIRED');
@@ -215,10 +228,12 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
       try {
         const hint = await regionHint;
         current();
-        const create = withHint => api('/verification-attempts', {method: 'POST', headers: {'content-type': 'application/json'},
+        // `x-pines-extension-version`: the package version the extension reported, for the identity's admission record.
+        const extensionVersion = typeof capabilities.extensionVersion === 'string' && /^[0-9][0-9.]{0,31}$/.test(capabilities.extensionVersion) ? capabilities.extensionVersion : undefined;
+        const create = withHint => api('/verification-attempts', {method: 'POST', headers: {'content-type': 'application/json', ...(extensionVersion ? {'x-pines-extension-version': extensionVersion} : {})},
           body: JSON.stringify({...(routing === 'assigned' ? {recipient, schema, routing} : {recipient, schema}), ...(withHint ? {regionHint: hint} : {})})});
         // A refused body created nothing; an API whose regional entry was switched off since discovery still serves the plain request.
-        try {attempt = await create(Boolean(hint));}
+        try {attempt = preparation?.assistedAttempt ?? await create(Boolean(hint));}
         catch (error) {if (!hint || error.status !== 400) throw error; current(); attempt = await create(false);}
       } catch (error) {
         if (!signal?.aborted && capabilities.admissionErrorScreen === true && admissionErrors.has(error.message)) {
@@ -255,6 +270,8 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
     extensionStatus: handle => handle.runId ? message('verification-status', {runId: handle.runId, recipient: handle.recipient}) : Promise.resolve(null),
     /** The page found this run's result saved by another route than `waitForReceipt`: tell the panel, as that does. */
     acknowledgeReceipt: async handle => { if (handle.runId) await message('receipt-verified', {runId: handle.runId, recipient: handle.recipient}); },
+    /** The identity holds this run's result for its e-mail challenge: the panel shows the code step (display only). */
+    acknowledgeHeld: async handle => { if (handle.runId) await message('receipt-held', {runId: handle.runId, recipient: handle.recipient}); },
     receiptStatus: async handle => checkStatus(handle, await api(`/verification-attempts/${handle.attempt.attemptId}`)),
     /** Explicit user cancellation: record the cancel request, then stop the extension run (a revealed run is spared). */
     async cancel(handle) {
@@ -293,12 +310,12 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
           }
           await checkCancelled();
           if (state?.status === 'verified' && uuid.test(state.receiptId)) {
-            // With no wallet sign-in the private records are not readable here. The status's own
+            // With no wallet sign-in (signature-free admission) the private records are not readable here. The status's own
             // `claimable` is the api's check of this very receipt (durable, bound, trusted); only where claims are off
             // does the public summary stand in for it, and it must list this provider for this wallet.
             const quiet = configuration?.walletSignIn === 'optional';
             if (configuration?.tee && !(quiet && state.claimable === true)) {
-              const provider = teeProviderFor(configuration.tee, handle.attempt.schema, true);
+              const capability = capabilityFor(handle.attempt.schema), provider = teeProviderFor(capability, handle.attempt.schema, true);
               let saved;
               try { saved = await api((quiet ? '/wallet-summary?recipient=' : '/wallet-verifications?recipient=') + handle.recipient); }
               catch (error) {
@@ -307,7 +324,7 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
                 await sleep(IDLE_WAIT_MS); continue;
               }
               if (saved.protocol !== (quiet ? 'pines-wallet-summary-v1' : 'pines-wallet-verifications-v1') || saved.recipient !== handle.recipient || saved.application !== application || saved.chainId !== chainId || !Array.isArray(saved.verifications)
-                || !provider || !saved.verifications.some(row => (quiet || row.id === state.receiptId && row.executionProfile === provider.profile && row.verificationEpoch === configuration.tee.verificationEpoch && sameSchema(row.schema, handle.attempt.schema))
+                || !provider || !saved.verifications.some(row => (quiet || row.id === state.receiptId && row.executionProfile === provider.profile && row.verificationEpoch === capability.verificationEpoch && sameSchema(row.schema, handle.attempt.schema))
                   && row.providerId === providerIds[provider.id] && row.validUntil > now())) throw Error('RECEIPT_REVOKED');
             }
             if (handle.runId) await message('receipt-verified', {runId: handle.runId, recipient: handle.recipient}).catch(() => {});
@@ -322,9 +339,11 @@ export function createTlsnClient({request, extensionId = TLSN_EXTENSION_ID, chai
               if (handle.runId) await message('cancel-verification', {runId: handle.runId, recipient: handle.recipient}).catch(() => {});
               throw Error('CANCELLED');
             }
-            const error = typeof state.error === 'string' && /^[A-Z_]{1,64}$/.test(state.error) ? state.error : state.status.toUpperCase();
+            // A sybil-policy refusal is lower case (`email_challenge_required`, `plan_paused`, …): the page gets the code its
+            // copy is keyed by; the extension, whose messages take upper case only, gets its upper-case form.
+            const error = typeof state.error === 'string' && /^[A-Za-z_]{1,64}$/.test(state.error) ? state.error : state.status.toUpperCase();
             const linkedWallet = linkedWalletOf(state);
-            if (handle.runId) await message('receipt-rejected', {runId: handle.runId, recipient: handle.recipient, error, linkedWallet: linkedWallet ?? null}).catch(() => {});
+            if (handle.runId) await message('receipt-rejected', {runId: handle.runId, recipient: handle.recipient, error: error.toUpperCase(), linkedWallet: linkedWallet ?? null}).catch(() => {});
             if (handle.runId) await message('cancel-verification', {runId: handle.runId, recipient: handle.recipient}).catch(() => {});
             throw Object.assign(Error(error), linkedWallet ? {linkedWallet} : {});
           }

@@ -21,6 +21,7 @@ const messages = {
   REVEALED_LIMIT_EXCEEDED: "Disclosure reveals more bytes than the schema admits",
   PATH_PARAM_MISMATCH: "Request path parameter is absent, malformed or unbound",
   SELECTED_SUBJECT_INELIGIBLE: "The proven subject is not an eligible paid personal account",
+  EXCHANGE_BINDING_MISMATCH: "A later exchange is not bound to the first one as the schema declares",
 } as const;
 
 export type SchemaErrorCode = keyof typeof messages;

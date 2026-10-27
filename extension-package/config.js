@@ -28,7 +28,7 @@ export default {
   "tee": {
     "api": "https://id.pines.family/tee",
     "relay": "wss://id.pines.family/channel",
-    "apiKey": "aa2381f0f5817a8e109a6b8eea3061224738c3bf77ea9b0df447023129ca1abd",
+    "apiKey": "29040c9367411bbaa1d831554a156dbcedd8283f0b5820d8ac3a0b2f18cac26c",
     "policySet": {
       "format": "pines-tee-native-policy-set-v1",
       "context": {
@@ -55,13 +55,13 @@ export default {
             "clockQualified": true,
             "lifecycleQualified": true,
             "measurements": [
-              "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa"
+              "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224"
             ],
             "pcrTuples": [
               [
-                "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa",
+                "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224",
                 "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-                "603a4d240b10cabc41f557bea8b9d3724a1d245da74acbb3358031b31215b9e9e538574ebafcaf337957244340b008ea"
+                "e8330b01d8992ee72bebf6c17e815badcbf2af342d3ae15c1ecd37295506df52c1f53f5f5e2a3baa5d42d6adbdc957aa"
               ]
             ],
             "simulationAllowed": false,
@@ -115,13 +115,13 @@ export default {
             "clockQualified": true,
             "lifecycleQualified": true,
             "measurements": [
-              "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa"
+              "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224"
             ],
             "pcrTuples": [
               [
-                "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa",
+                "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224",
                 "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-                "603a4d240b10cabc41f557bea8b9d3724a1d245da74acbb3358031b31215b9e9e538574ebafcaf337957244340b008ea"
+                "e8330b01d8992ee72bebf6c17e815badcbf2af342d3ae15c1ecd37295506df52c1f53f5f5e2a3baa5d42d6adbdc957aa"
               ]
             ],
             "simulationAllowed": false,
@@ -175,13 +175,13 @@ export default {
             "clockQualified": true,
             "lifecycleQualified": true,
             "measurements": [
-              "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa"
+              "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224"
             ],
             "pcrTuples": [
               [
-                "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa",
+                "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224",
                 "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-                "603a4d240b10cabc41f557bea8b9d3724a1d245da74acbb3358031b31215b9e9e538574ebafcaf337957244340b008ea"
+                "e8330b01d8992ee72bebf6c17e815badcbf2af342d3ae15c1ecd37295506df52c1f53f5f5e2a3baa5d42d6adbdc957aa"
               ]
             ],
             "simulationAllowed": false,
@@ -359,13 +359,13 @@ export default {
           "clockQualified": true,
           "lifecycleQualified": true,
           "measurements": [
-            "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa"
+            "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224"
           ],
           "pcrTuples": [
             [
-              "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa",
+              "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224",
               "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-              "603a4d240b10cabc41f557bea8b9d3724a1d245da74acbb3358031b31215b9e9e538574ebafcaf337957244340b008ea"
+              "e8330b01d8992ee72bebf6c17e815badcbf2af342d3ae15c1ecd37295506df52c1f53f5f5e2a3baa5d42d6adbdc957aa"
             ]
           ],
           "simulationAllowed": false,
@@ -551,13 +551,13 @@ export default {
           "clockQualified": true,
           "lifecycleQualified": true,
           "measurements": [
-            "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa"
+            "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224"
           ],
           "pcrTuples": [
             [
-              "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa",
+              "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224",
               "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-              "603a4d240b10cabc41f557bea8b9d3724a1d245da74acbb3358031b31215b9e9e538574ebafcaf337957244340b008ea"
+              "e8330b01d8992ee72bebf6c17e815badcbf2af342d3ae15c1ecd37295506df52c1f53f5f5e2a3baa5d42d6adbdc957aa"
             ]
           ],
           "simulationAllowed": false,
@@ -743,13 +743,13 @@ export default {
           "clockQualified": true,
           "lifecycleQualified": true,
           "measurements": [
-            "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa"
+            "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224"
           ],
           "pcrTuples": [
             [
-              "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa",
+              "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224",
               "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
-              "603a4d240b10cabc41f557bea8b9d3724a1d245da74acbb3358031b31215b9e9e538574ebafcaf337957244340b008ea"
+              "e8330b01d8992ee72bebf6c17e815badcbf2af342d3ae15c1ecd37295506df52c1f53f5f5e2a3baa5d42d6adbdc957aa"
             ]
           ],
           "simulationAllowed": false,
@@ -850,6 +850,9 @@ export default {
           ]
         }
       ]
+    },
+    "manifest": {
+      "required": true
     }
   },
   "schemas": [
@@ -871,5 +874,389 @@ export default {
   ],
   "chatgptClaims": false,
   "chatgptIdentity": true,
-  "extensionId": "lanmbpkmblcijblbllbikenpnceidmpj"
+  "extensionId": "lanmbpkmblcijblbllbikenpnceidmpj",
+  "grokAssistance": {
+    "version": 1,
+    "enabled": true,
+    "pin": {
+      "group": "grok-email-gm1026",
+      "nodeId": "migration-v2",
+      "egressIpv4": "13.237.5.237",
+      "egressPath": "pines-grok-relay-v1",
+      "browserPort": 8443,
+      "verifierPort": 443,
+      "certificateSha256": "FBC335B1CD07247965E3E98705AEDB94F5C4AD15B1F469E9EFAC07C19343C366",
+      "schemaDigest": "sha256:00fad822a40d6e05c730450442fc2c182be94a90f1cb8ad1b3b3b497f72f8af0"
+    },
+    "qualification": {
+      "chromeMajors": [
+        154,
+        155
+      ],
+      "existingSockets": true,
+      "http3": true,
+      "serviceWorkers": true,
+      "restartCleanup": true,
+      "desktopTransport": true
+    },
+    "tee": {
+      "api": "https://id.pines.family/tee",
+      "relay": "wss://id.pines.family/channel",
+      "apiKey": "29040c9367411bbaa1d831554a156dbcedd8283f0b5820d8ac3a0b2f18cac26c",
+      "policySet": {
+        "format": "pines-tee-native-policy-set-v1",
+        "context": {
+          "application": "pines",
+          "chain": 8453,
+          "revision": "tee-v5-20261012",
+          "verificationEpoch": "pines-tee-v5-20261012",
+          "protocolVersion": "pines-tee-native-v2",
+          "trustPolicyVersion": 3
+        },
+        "providers": [
+          {
+            "id": "grok",
+            "schema": {
+              "schemaId": "pines.grok.tee.native",
+              "version": 6,
+              "digest": "sha256:00fad822a40d6e05c730450442fc2c182be94a90f1cb8ad1b3b3b497f72f8af0"
+            },
+            "inventorySha256": "9a7978653b2af053b58ff39234d49a2e8317bb8d789e85e71094f4b1f6d5c591",
+            "policy": {
+              "profile": "pines.grok.tee.native.nitro.v1",
+              "admissionEnabled": true,
+              "providerQualified": true,
+              "clockQualified": true,
+              "lifecycleQualified": true,
+              "measurements": [
+                "ee7d94fe238ba8d0717b3543c74a927036de8aaac7e9a6c1ee027c51f108d75827fd2f25fffb4b43d6ed0e07c88cf6a7"
+              ],
+              "pcrTuples": [
+                [
+                  "ee7d94fe238ba8d0717b3543c74a927036de8aaac7e9a6c1ee027c51f108d75827fd2f25fffb4b43d6ed0e07c88cf6a7",
+                  "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
+                  "9df97b02b62ef2f2e96463f68acac6be7bb8745a94cbb97adbc50bb93a798e15c82401db9dbd0d33afb5b1068a009aff"
+                ]
+              ],
+              "simulationAllowed": false,
+              "debugAllowed": false,
+              "providerHost": "grok.com",
+              "providerPort": 443,
+              "channelVsockPort": 8000,
+              "providerEgressVsockPort": 8003,
+              "parentCid": 3,
+              "limits": {
+                "maxSentBytes": 8192,
+                "maxRecvBytes": 65536,
+                "maxHeaderBytes": 8192,
+                "maxBodyBytes": 16384,
+                "maxJsonDepth": 16,
+                "sessionTimeoutMs": 120000,
+                "maxRecvRecords": 1024,
+                "protocolBytesPerDirection": 67108864
+              },
+              "verificationEpoch": "pines-tee-v5-20261012",
+              "trustPolicyVersion": 3,
+              "revokedBootIds": [],
+              "revokedWorkerIds": [],
+              "revokedMeasurements": [],
+              "identity": {
+                "generation": "v2",
+                "protocol": "pines-keyed-receipt-v2",
+                "keyArn": "arn:aws:kms:ap-southeast-2:594194277294:key/3d63a788-0acf-42c1-b20c-1c3bdd9e2375",
+                "wrappedSha256": "96d0ced12724aae52577a418cf00dbe7cabf85c327ac7bb1cb900dfdd07d9af1",
+                "configurationAuthority": "ece4f5e90c2344e7551daa7e933b0b2a32b28b4d108e9c1636b0dce786822cc7",
+                "configurationSha256": "be48fb19803397de79e6b7afcd9213dd1e88a9efa77890a0a7124e62f36c6c0c"
+              }
+            }
+          }
+        ]
+      },
+      "providers": [
+        {
+          "schema": {
+            "format": "pines-verification-schema-v1",
+            "schemaId": "pines.grok.tee.native",
+            "version": 6,
+            "providerId": "GROK-PLAN",
+            "lifecycle": "qualified",
+            "request": {
+              "origin": "https://grok.com",
+              "method": "GET",
+              "path": "/rest/subscriptions",
+              "query": {
+                "status": "SUBSCRIPTION_STATUS_ACTIVE"
+              },
+              "body": {
+                "kind": "empty"
+              }
+            },
+            "capture": {
+              "navigationUrl": "https://grok.com/",
+              "authOrigins": [
+                "https://grok.com"
+              ],
+              "headers": [
+                {
+                  "name": "user-agent",
+                  "required": true,
+                  "secret": true,
+                  "validation": "visible-ascii"
+                }
+              ],
+              "cookies": [
+                "sso"
+              ],
+              "trigger": {
+                "pathPrefix": "/rest/"
+              },
+              "optionalCookies": [
+                "cf_clearance"
+              ]
+            },
+            "replay": {
+              "transform": "fixed-request-v1",
+              "headers": {
+                "accept": "application/json"
+              }
+            },
+            "limits": {
+              "maxSentBytes": 8192,
+              "maxRecvBytes": 65536,
+              "maxHeaderBytes": 8192,
+              "maxBodyBytes": 16384,
+              "maxJsonDepth": 16,
+              "sessionTimeoutMs": 120000,
+              "maxRecvRecords": 1024,
+              "concurrency": 1
+            },
+            "response": {
+              "status": 200,
+              "contentType": "application/json",
+              "disclosure": "full-json-body"
+            },
+            "selector": {
+              "kind": "grok-paid-subscription-v2",
+              "maxItems": 4
+            },
+            "fields": [
+              {
+                "id": "xai_user_id",
+                "pointer": "/xaiUserId",
+                "type": "string"
+              },
+              {
+                "id": "tier",
+                "pointer": "/tier",
+                "type": "string"
+              },
+              {
+                "id": "status",
+                "pointer": "/status",
+                "type": "string"
+              },
+              {
+                "id": "pines_tenure_start_at",
+                "pointer": "/createTime",
+                "type": "string",
+                "transform": "iso-8601-seconds-v1"
+              },
+              {
+                "id": "grok_billing_system",
+                "pointer": "/billingSystem",
+                "type": "string"
+              },
+              {
+                "id": "pines_billing_platform",
+                "pointer": "/pines_billing_platform_source",
+                "type": "string"
+              }
+            ],
+            "checks": [
+              {
+                "op": "custom",
+                "field": "xai_user_id",
+                "handler": "grok-user-uuid-v1"
+              },
+              {
+                "op": "custom",
+                "field": "tier",
+                "handler": "grok-paid-tier-v1"
+              },
+              {
+                "op": "eq",
+                "field": "status",
+                "value": "SUBSCRIPTION_STATUS_ACTIVE"
+              },
+              {
+                "op": "custom",
+                "field": "grok_billing_system",
+                "handler": "non-empty-string-v1"
+              },
+              {
+                "op": "in",
+                "field": "pines_billing_platform",
+                "values": [
+                  "stripe",
+                  "apple",
+                  "google",
+                  "x",
+                  "unknown"
+                ]
+              }
+            ],
+            "identity": {
+              "version": "grok-private-keyed-v2",
+              "kind": "field",
+              "field": "xai_user_id"
+            },
+            "claims": {
+              "enabled": true,
+              "domain": "grok.com",
+              "templateIds": [
+                "GROK-PAGE"
+              ]
+            },
+            "exchanges": [
+              {
+                "request": {
+                  "path": "/rest/auth/get-user",
+                  "query": {},
+                  "headers": []
+                },
+                "fields": [
+                  {
+                    "id": "grok_user_id",
+                    "pointer": "/userId",
+                    "type": "string"
+                  },
+                  {
+                    "id": "pines_email",
+                    "pointer": "/email",
+                    "type": "string"
+                  },
+                  {
+                    "id": "pines_created_at",
+                    "pointer": "/createTime",
+                    "type": "string",
+                    "transform": "iso-8601-seconds-v1"
+                  },
+                  {
+                    "id": "grok_email_confirmed",
+                    "pointer": "/emailConfirmed",
+                    "type": "boolean"
+                  }
+                ],
+                "checks": [
+                  {
+                    "op": "custom",
+                    "field": "grok_user_id",
+                    "handler": "grok-user-uuid-v1"
+                  }
+                ],
+                "binding": {
+                  "kind": "response-field",
+                  "pointer": "/userId"
+                }
+              }
+            ]
+          },
+          "reference": {
+            "schemaId": "pines.grok.tee.native",
+            "version": 6,
+            "digest": "sha256:00fad822a40d6e05c730450442fc2c182be94a90f1cb8ad1b3b3b497f72f8af0"
+          },
+          "profile": "pines.grok.tee.native.nitro.v1",
+          "publicPlanValues": [
+            "SUBSCRIPTION_TIER_X_PREMIUM_PLUS",
+            "SUBSCRIPTION_TIER_SUPER_GROK_LITE",
+            "SUBSCRIPTION_TIER_GROK_PRO",
+            "SUBSCRIPTION_TIER_SUPER_GROK_PLUS",
+            "SUBSCRIPTION_TIER_SUPER_GROK_PRO"
+          ],
+          "policy": {
+            "profile": "pines.grok.tee.native.nitro.v1",
+            "admissionEnabled": true,
+            "providerQualified": true,
+            "clockQualified": true,
+            "lifecycleQualified": true,
+            "measurements": [
+              "ee7d94fe238ba8d0717b3543c74a927036de8aaac7e9a6c1ee027c51f108d75827fd2f25fffb4b43d6ed0e07c88cf6a7"
+            ],
+            "pcrTuples": [
+              [
+                "ee7d94fe238ba8d0717b3543c74a927036de8aaac7e9a6c1ee027c51f108d75827fd2f25fffb4b43d6ed0e07c88cf6a7",
+                "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
+                "9df97b02b62ef2f2e96463f68acac6be7bb8745a94cbb97adbc50bb93a798e15c82401db9dbd0d33afb5b1068a009aff"
+              ]
+            ],
+            "simulationAllowed": false,
+            "debugAllowed": false,
+            "providerHost": "grok.com",
+            "providerPort": 443,
+            "channelVsockPort": 8000,
+            "providerEgressVsockPort": 8003,
+            "parentCid": 3,
+            "limits": {
+              "maxSentBytes": 8192,
+              "maxRecvBytes": 65536,
+              "maxHeaderBytes": 8192,
+              "maxBodyBytes": 16384,
+              "maxJsonDepth": 16,
+              "sessionTimeoutMs": 120000,
+              "maxRecvRecords": 1024,
+              "protocolBytesPerDirection": 67108864
+            },
+            "verificationEpoch": "pines-tee-v5-20261012",
+            "trustPolicyVersion": 3,
+            "revokedBootIds": [],
+            "revokedWorkerIds": [],
+            "revokedMeasurements": [],
+            "identity": {
+              "generation": "v2",
+              "protocol": "pines-keyed-receipt-v2",
+              "keyArn": "arn:aws:kms:ap-southeast-2:594194277294:key/3d63a788-0acf-42c1-b20c-1c3bdd9e2375",
+              "wrappedSha256": "96d0ced12724aae52577a418cf00dbe7cabf85c327ac7bb1cb900dfdd07d9af1",
+              "configurationAuthority": "ece4f5e90c2344e7551daa7e933b0b2a32b28b4d108e9c1636b0dce786822cc7",
+              "configurationSha256": "be48fb19803397de79e6b7afcd9213dd1e88a9efa77890a0a7124e62f36c6c0c"
+            }
+          }
+        }
+      ],
+      "disclosurePolicy": "grok-email-complete-v1",
+      "capability": {
+        "application": "pines",
+        "chain": 8453,
+        "revision": "tee-v5-20261012",
+        "verificationEpoch": "pines-tee-v5-20261012",
+        "protocolVersion": "pines-tee-native-v2",
+        "trustPolicyVersion": 3,
+        "protocol": "pines-tee-native-v2",
+        "capabilityVersion": 2,
+        "claimSigningAvailable": false,
+        "providers": [
+          {
+            "id": "grok",
+            "profile": "pines.grok.tee.native.nitro.v1",
+            "schema": {
+              "schemaId": "pines.grok.tee.native",
+              "version": 6,
+              "digest": "sha256:00fad822a40d6e05c730450442fc2c182be94a90f1cb8ad1b3b3b497f72f8af0"
+            },
+            "savedSchemas": [
+              {
+                "schemaId": "pines.grok.tee.native",
+                "version": 6,
+                "digest": "sha256:00fad822a40d6e05c730450442fc2c182be94a90f1cb8ad1b3b3b497f72f8af0"
+              }
+            ]
+          }
+        ]
+      },
+      "manifest": {
+        "required": true
+      },
+      "generation": "grok-email-20261026"
+    }
+  }
 };

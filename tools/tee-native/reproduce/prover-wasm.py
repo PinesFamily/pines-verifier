@@ -4,7 +4,8 @@
 Usage: prover-wasm.py NEW_OUTPUT_DIRECTORY
 Requires git, Python 3, rustup with nightly-2026-05-31/rust-src/wasm32-unknown-unknown,
 and network access. Acquires the shared heavy-build lock on this workspace.
-The source patch and every final package byte are checked against the public pin.
+Both source patches (the IO adapter, then the multi-request session), the files they
+produce and every final package byte are checked against the public pin.
 """
 from pathlib import Path
 import fcntl, hashlib, json, os, resource, shutil, subprocess, sys, tarfile, time, urllib.request
@@ -21,6 +22,10 @@ if not patch.exists():
     assert len(matches) == 1, 'PATCH_PIN'
     patch = matches[0]
 assert sha(patch) == pin['patchSha256'], 'PATCH_PIN'
+# 0002 applies after 0001 and is found by its pinned hash alone.
+session_patches = [p for p in (root / 'apps/tlsn-prover/patches').glob('*') if p.is_file() and sha(p) == pin['sessionPatchSha256']]
+assert len(session_patches) == 1, 'SESSION_PATCH_PIN'
+session_patch = session_patches[0]
 tools = [
     ('https://github.com/wasm-bindgen/wasm-pack/releases/download/v0.14.0/wasm-pack-v0.14.0-x86_64-unknown-linux-musl.tar.gz',
      '278a8d668085821f4d1a637bd864f1713f872b0ae3a118c77562a308c0abfe8d', 'wasm-pack-v0.14.0-x86_64-unknown-linux-musl'),
@@ -45,6 +50,11 @@ subprocess.run(['git', 'clone', '--quiet', '--no-checkout', 'https://github.com/
 subprocess.run(['git', '-C', str(source), 'checkout', '--quiet', pin['upstreamCommit']], check=True)
 subprocess.run(['git', '-C', str(source), 'apply', str(patch)], check=True)
 assert sha(source / 'crates/wasm/src/io.rs') == pin['ioSourceSha256'], 'IO_SOURCE_HASH'
+subprocess.run(['git', '-C', str(source), 'apply', str(session_patch)], check=True)
+assert sha(source / 'crates/wasm/src/io.rs') == pin['ioSourceSha256'], 'IO_SOURCE_HASH'
+assert {path: sha(source / path) for path in pin['sessionSourceSha256']} == pin['sessionSourceSha256'], 'SESSION_SOURCE_HASH'
+changed = subprocess.run(['git', '-C', str(source), 'diff', '--name-only'], check=True, capture_output=True, text=True).stdout.split()
+assert sorted(changed) == sorted(['crates/wasm/src/io.rs', *pin['sessionSourceSha256']]), 'PATCHED_FILE_SET'
 env = {k:v for k,v in os.environ.items() if k not in ['RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS']}
 env.update(RUSTC_WRAPPER='', RUSTC_WORKSPACE_WRAPPER='', RUSTUP_TOOLCHAIN='nightly-2026-05-31',
            CARGO_BUILD_JOBS='2', CARGO_TARGET_DIR=str(out / 'target'), WASM_PACK_CACHE=str(out / 'cache'),
@@ -88,6 +98,7 @@ metadata.write_text(json.dumps(value, indent=2)+'\n')
 (package / '.gitignore').unlink(missing_ok=True)
 actual = {p.relative_to(package).as_posix():sha(p) for p in package.rglob('*') if p.is_file()}
 report = {'passed': actual == pin['files'], 'sourceCommit':pin['upstreamCommit'], 'patchSha256':pin['patchSha256'],
+          'sessionPatchSha256':pin['sessionPatchSha256'],
           'toolArchives':[t[1] for t in tools], 'files':actual, 'hardwareExecuted':False}
 (out / 'result.json').write_text(json.dumps(report, indent=2)+'\n')
 assert report['passed'], 'PACKAGE_DIFFERS_FROM_PIN'

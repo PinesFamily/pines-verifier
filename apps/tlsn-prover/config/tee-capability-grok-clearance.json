@@ -1,0 +1,29 @@
+{
+  "application": "pines",
+  "chain": 8453,
+  "revision": "tee-v5-20261012",
+  "verificationEpoch": "pines-tee-v5-20261012",
+  "protocolVersion": "pines-tee-native-v2",
+  "trustPolicyVersion": 3,
+  "protocol": "pines-tee-native-v2",
+  "capabilityVersion": 2,
+  "claimSigningAvailable": false,
+  "providers": [
+    {
+      "id": "grok",
+      "profile": "pines.grok.tee.native.nitro.v2",
+      "schema": {
+        "schemaId": "pines.grok.tee.native",
+        "version": 5,
+        "digest": "sha256:dbbe0a0e383d7961752f228e8096f144d2fbcbe6900394dd37a6eafd85e98e6b"
+      },
+      "savedSchemas": [
+        {
+          "schemaId": "pines.grok.tee.native",
+          "version": 5,
+          "digest": "sha256:dbbe0a0e383d7961752f228e8096f144d2fbcbe6900394dd37a6eafd85e98e6b"
+        }
+      ]
+    }
+  ]
+}

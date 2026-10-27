@@ -7,7 +7,8 @@ import {build} from 'esbuild';
 import {funnelOrigins, matchPatternsFor} from './src/funnel-origins.mjs';
 import {copyPinnedWasm} from './wasm-io-package.mjs';
 import {regionalConnectSources} from './regional-entry-build.mjs';
-import {teePolicyFile} from './tee-policy-file.mjs';
+import {GENERATIONS, LIVE_GENERATION, teeCapabilityPin, teePolicyFile} from './tee-policy-file.mjs';
+import {assistanceBuild} from './grok-assistance-build.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -59,7 +60,21 @@ const regionalSuffix = env.PINES_TEE_REGIONAL_ENTRY_SUFFIX;
 // class, byte-identical to every earlier build. The private-headers class is an explicit
 // choice for a TEE build only; a package never carries both, and nothing falls back.
 const disclosurePolicyId = env.PINES_TEE_DISCLOSURE_POLICY ?? 'full-response-v1';
-if (!['full-response-v1', 'private-headers-gzip-v1'].includes(disclosurePolicyId)) throw Error('TEE_DISCLOSURE_POLICY');
+// The trust manifest: every TEE package requires the identity's owner-signed admitted set in place of the policy
+// set bundled below (src/trust-manifest.mjs). PINES_TEE_MANIFEST=0 keeps the bundled policy authoritative for the
+// qualification, fixture and local-qualification harnesses only; a public package never opts out.
+if (env.PINES_TEE_MANIFEST !== undefined && !['0', '1'].includes(env.PINES_TEE_MANIFEST)) throw Error('TEE_MANIFEST');
+const manifestRequired = env.PINES_TEE_MANIFEST !== '0';
+// PINES_TEE_MANIFEST_TEST_KEYS=<fixture>: a TEST build verifies manifests against that test pair's public pins instead of
+// the owner's (a local stack signed with the committed pair). Never a public package; the pins stay compiled in untouched.
+const manifestTestKeysFile = env.PINES_TEE_MANIFEST_TEST_KEYS;
+if (manifestTestKeysFile !== undefined && (!testBuild || publicRelease || publicPrivateHeaders)) throw Error('TEE_MANIFEST_TEST_KEYS_SCOPE');
+// The provider generation this package admits (tee-policy-file.mjs): the live one unless PINES_TEE_PROVIDER_GENERATION
+// names the sybil-facts one, whose policy set, capability pin and manifest the identity and this package select together.
+const generation = env.PINES_TEE_PROVIDER_GENERATION ?? LIVE_GENERATION;
+if (!GENERATIONS.includes(generation)) throw Error('TEE_PROVIDER_GENERATION');
+if (generation !== LIVE_GENERATION && (!teePublic || !['facts-complete-v1', 'grok-clearance-private-v1', 'grok-email-complete-v1'].includes(disclosurePolicyId) || publicRelease || qualification || teeFixture)) throw Error('TEE_PROVIDER_GENERATION_SCOPE');
+if (!['full-response-v1', 'private-headers-gzip-v1', 'facts-complete-v1', 'grok-clearance-private-v1', 'grok-email-complete-v1'].includes(disclosurePolicyId)) throw Error('TEE_DISCLOSURE_POLICY');
 if (disclosurePolicyId !== 'full-response-v1' && !teePublic) throw Error('TEE_DISCLOSURE_POLICY_SCOPE');
 if (publicPrivateHeaders && (!teePublic || teeFixture || disclosurePolicyId !== privateHeadersRelease.disclosurePolicy)) throw Error('TEE_PUBLIC_RELEASE_SCOPE');
 function origin(value) {
@@ -91,17 +106,19 @@ const chainId = Number(env.PINES_TLSN_CHAIN_ID ?? 8453);
 if (!/^[a-zA-Z0-9._-]{1,80}$/.test(verifierRevision) || !/^[a-zA-Z0-9._-]{1,64}$/.test(application) || !Number.isSafeInteger(chainId) || chainId <= 0) throw Error('Invalid verifier audience or revision');
 const migrationQualification = env.PINES_TEE_MIGRATION_QUALIFICATION === undefined ? null
   : (await import('../../tools/tee-native/hardware/migration-qualification.mjs')).migrationQualificationBuild({env,publicConfig:teePublic,origins,sourceDirty});
+const recoveryQualification = env.PINES_TEE_RECOVERY_QUALIFICATION === undefined ? null
+  : (await import('../../tools/tee-native/hardware/recovery-qualification.mjs')).recoveryQualificationBuild({env,publicConfig:teePublic,origins,sourceDirty});
 let tee;
 if (teePublic) {
   const {providersFor, hardwareCapability} = await import('../../tools/tee-native/profile.mjs');
   const {policyForSchema} = await import('../../tools/tee-native/policy.mjs');
   const {CONTEXT} = await import('../../tools/tee-native/hardware/context.mjs');
-  const policySet = migrationQualification ? migrationQualification.policy : qualification ? qualification.policy : teeFixture ? teePublic.policy
-    : JSON.parse(await readFile(join(root, teePolicyFile(disclosurePolicyId)), 'utf8'));
+  const policySet = recoveryQualification ? recoveryQualification.policy : migrationQualification ? migrationQualification.policy : qualification ? qualification.policy : teeFixture ? teePublic.policy
+    : JSON.parse(await readFile(join(root, publicPrivateHeaders ? privateHeadersRelease.policyFile : teePolicyFile(disclosurePolicyId, generation)), 'utf8'));
   if (teeFixture && (!teeFixture.origin || origins.length !== 1 || origins[0] !== teeFixture.origin || !['http://localhost:5262'].includes(teeFixture.origin))) throw Error('TEE_FIXTURE_ORIGIN_REFUSED');
   if (!/^[a-f0-9]{64}$/.test(teePublic.apiKey) || JSON.stringify(teePublic.policy) !== JSON.stringify(policySet)) throw Error('TEE_TRUST_POLICY_UNQUALIFIED');
   if (qualification && qualification.disclosurePolicy !== disclosurePolicyId) throw Error('QUALIFICATION_DISCLOSURE_POLICY');
-  const providers = await Promise.all(providersFor(disclosurePolicyId).map(async entry => {
+  const providers = await Promise.all(providersFor(disclosurePolicyId, generation).map(async entry => {
     const policy = await policyForSchema(policySet, entry.reference, disclosurePolicyId);
     if (policy?.admissionEnabled && (policy.identity?.generation!=='v2' || !entry.inventory.qualified || policy.syntheticOnly || !policy.providerQualified || !policy.clockQualified || !policy.lifecycleQualified
       || policy.debugAllowed !== false || policy.simulationAllowed !== false || !Array.isArray(policy.pcrTuples) || policy.pcrTuples.length !== 1
@@ -121,13 +138,19 @@ if (teePublic) {
   // A public package admits every provider its policy names, or it is not released.
   if (publicPrivateHeaders && !providers.every(entry => entry.policy?.admissionEnabled)) throw Error('TEE_PUBLIC_RELEASE_UNQUALIFIED');
   if (verifierOrigin !== apiOrigin || verifierRevision !== CONTEXT.revision || application !== CONTEXT.application || chainId !== CONTEXT.chain) throw Error('TEE_CONTEXT_DRIFT');
+  if (!manifestRequired && !(qualification || migrationQualification || recoveryQualification || teeFixture || localQualification)) throw Error('TEE_MANIFEST_SCOPE');
+  // A public package pins the owner keys it ships with; the committed test pair signs for anyone who holds the repository.
+  const {OWNER_KEYS_PROVENANCE} = await import('../../packages/verification-schemas/src/sybil/owner-keys.ts');
+  if ((publicRelease || publicPrivateHeaders) && OWNER_KEYS_PROVENANCE !== 'production') throw Error('OWNER_KEYS_TEST_PROVENANCE');
   const entry = regionalSuffix === undefined ? undefined : await import('../../tools/tee-native/fleet-entry.mjs');
   tee = {api: apiOrigin + '/tee', relay: apiOrigin.replace(/^http/, 'ws') + '/channel', apiKey: teePublic.apiKey, policySet, providers, disclosurePolicy: disclosurePolicyId,
-    capability: hardwareCapability(disclosurePolicyId), ...(teeFixture ? {fixture: teeFixture} : {}),
+    // `generation` is written only for the other generation, so a live package's config.js is byte-identical to one built before the option.
+    capability: hardwareCapability(disclosurePolicyId, generation), ...(generation === LIVE_GENERATION ? {} : {generation}),
+    manifest: {required: manifestRequired, ...(manifestTestKeysFile === undefined ? {} : {testKeys: (await import('../../packages/verification-schemas/src/sybil/owner-keys.ts')).testOwnerKeysFrom(JSON.parse(await readFile(manifestTestKeysFile, 'utf8')))})}, ...(teeFixture ? {fixture: teeFixture} : {}),
     ...(entry ? {regionalEntry: {version: 1, protocol: entry.ENTRY_PROTOCOL, suffix: entry.validateEntrySuffix(regionalSuffix)}} : {})};
 }
-// Each class has its own pinned capability file; the full-response pin is the unchanged one.
-const capabilityPin = disclosurePolicyId === 'full-response-v1' ? 'config/tee-capability.json' : 'config/tee-capability-private-headers.json';
+// Each class and generation has its own pinned capability file; the full-response pin is the unchanged one.
+const capabilityPin = teeCapabilityPin(disclosurePolicyId, generation);
 if (tee && JSON.stringify(tee.capability) !== JSON.stringify(JSON.parse(await readFile(join(here, capabilityPin), 'utf8')))) throw Error('TEE_PUBLIC_PIN_DRIFT');
 if (localQualification && (sourceDirty || publicRelease || publicPrivateHeaders || qualification || teeFixture || regionalSuffix !== undefined || !tee
   || disclosurePolicyId !== 'private-headers-gzip-v1' || tee.api !== 'https://identity-qualification.up.railway.app/tee'
@@ -138,6 +161,10 @@ const config = {protocol: 'pines-tlsn-bridge-v1', wasmVersion: '0.1.0-alpha.15',
   ...(tee ? {tee} : {}), schemas: tee ? tee.providers.filter(entry => entry.policy?.admissionEnabled).map(entry => entry.reference) : chatgpt ? [{schemaId: 'pines.chatgpt.plan', version: chatgptIdentity ? 3 : chatgptClaims ? 2 : 1}, ...(claude ? [{schemaId: 'pines.claude.plan', version: 1}] : []),
     ...(grok ? [{schemaId: 'pines.grok.plan', version: 1}] : [])]
     : [{schemaId: privateFixture ? 'pines.fixture.httpbingo-private' : 'pines.fixture.httpbingo', version: 1}], chatgptClaims, chatgptIdentity, extensionId: identity.id};
+const assistance = await assistanceBuild({file: env.PINES_GROK_ASSISTANCE_CONFIG, tee, root,
+  publicRelease: publicRelease || publicPrivateHeaders, qualification: qualification || migrationQualification || teeFixture || localQualification,
+  recoveryQualification});
+if (assistance) config.grokAssistance = assistance;
 if(config.qualificationResponseMetadata)(await import('./src/replay-metadata.mjs')).metadataConfiguration(config);
 await rm(out, {recursive: true, force: true}); await mkdir(out);
 await cp(join(here, 'src'), out, {recursive: true});
@@ -145,6 +172,7 @@ await cp(join(here, 'src'), out, {recursive: true});
 // imports cannot escape the extension root after Chrome installs the build.
 await build({entryPoints: [join(here, 'src/session-timing.js')], bundle: true, format: 'esm', platform: 'browser', target: 'chrome116', outfile: join(out, 'session-timing.js'), logLevel: 'warning'});
 await build({entryPoints: [join(here, 'src/region-preference.mjs')], bundle: true, format: 'esm', platform: 'browser', target: 'chrome116', outfile: join(out, 'region-preference.mjs'), logLevel: 'warning'});
+await build({entryPoints: [join(here, 'src/grok-assistance.mjs')], bundle: true, format: 'esm', platform: 'browser', target: 'chrome141', outfile: join(out, 'grok-assistance.mjs'), logLevel: 'warning'});
 if (tee) {
   await build({entryPoints: [join(here, 'src/tee-worker.js')], bundle: true, format: 'esm', platform: 'browser', target: 'chrome141', external: ['./config.js', './wasm/tlsn_wasm.js'], outfile: join(out, 'tee-worker.js'), logLevel: 'warning'});
   await cp(join(root, 'tools/tee-native/attestation-wasm/pkg/pines_nitro_validation_bg.wasm'), join(out, 'nitro-validation.wasm'));
@@ -173,7 +201,8 @@ let wasmRuntime;
 if (tee) {
   wasmRuntime = await copyPinnedWasm({source: join(here, 'wasm-io'), destination: join(out, 'wasm'),
     pin: JSON.parse(await readFile(join(here, 'config/tee-wasm-io.json'), 'utf8')),
-    patchFile: join(here, 'patches/0001-await-io-write.patch')});
+    patchFile: join(here, 'patches/0001-await-io-write.patch'),
+    sessionPatchFile: join(here, 'patches/0002-multi-request-session.patch')});
 } else await cp(dirname(fileURLToPath(import.meta.resolve('tlsn-wasm'))), join(out, 'wasm'), {recursive: true});
 await writeFile(join(out, 'config.js'), `export default ${JSON.stringify(config, null, 2)};\n`);
 const listedVerifiers = [...legacyVerifiers, ...testVerifiers];
@@ -181,13 +210,16 @@ const connectSources = [...(tee ? [] : ['https://*.verifier.pines.family', 'wss:
 if(config.qualificationResponseMetadata?.receiver)connectSources.push(new URL(config.qualificationResponseMetadata.receiver).origin);
 // Only the dedicated entry zone: channel sockets and credential-free latency probes. Never `*.pines.family`.
 if(tee?.regionalEntry)connectSources.push(...regionalConnectSources(tee.regionalEntry.suffix));
+if(assistance)connectSources.push('https://grok.com');
+// Chrome requires proxy at installation; authentication remains optional.
 const manifest = {
-  manifest_version: 3, minimum_chrome_version: '141', name: migrationQualification || qualification || localQualification ? 'Pines Verifier LOCAL QUALIFICATION' : teeFixture ? 'Pines Verifier HARDWARE FIXTURE' : 'Pines Verifier', version: migrationQualification ? migrationQualification.version : qualification ? qualification.version : localQualification ? '1.17.0' : publicPrivateHeaders ? privateHeadersRelease.version : tee ? '1.4.0' : '0.9.3', key: identity.key,
+  manifest_version: 3, minimum_chrome_version: '141', name: migrationQualification || recoveryQualification || qualification || localQualification ? 'Pines Verifier LOCAL QUALIFICATION' : teeFixture ? 'Pines Verifier HARDWARE FIXTURE' : 'Pines Verifier', version: recoveryQualification ? recoveryQualification.version : migrationQualification ? migrationQualification.version : qualification ? qualification.version : localQualification ? '1.17.0' : publicPrivateHeaders ? privateHeadersRelease.version : tee ? '1.4.0' : '0.9.3', key: identity.key,
   icons: {16: 'icons/icon-16.png', 32: 'icons/icon-32.png', 48: 'icons/icon-48.png', 128: 'icons/icon-128.png'},
   description: tee ? 'Verify your ChatGPT, Claude or Grok subscription privately with native TLSNotary and an attested AWS enclave.' : claude || grok ? `Prove your paid ${['ChatGPT', ...(claude ? ['Claude'] : []), ...(grok ? ['Grok'] : [])].join(', ').replace(/, ([^,]+)$/, ' or $1')} subscription to Pines with a zkTLS proof.` : chatgptClaims || chatgptIdentity ? 'Prove your paid ChatGPT subscription to Pines with a zkTLS proof.' : 'Review disclosures and create non-claimable TLSNotary Proxy pilot receipts.',
   background: {service_worker: 'background.js', type: 'module'},
   action: {default_title: 'Open Pines Verifier', default_icon: {16: 'icons/icon-16.png', 32: 'icons/icon-32.png'}}, side_panel: {default_path: 'panel.html'},
-  permissions: ['offscreen', 'storage', 'sidePanel', 'alarms', ...(config.captureProvider ? ['webRequest'] : [])],
+  permissions: ['offscreen', 'storage', 'sidePanel', 'alarms', ...(config.captureProvider ? ['webRequest'] : []), ...(assistance ? ['proxy'] : [])],
+  ...(assistance ? {optional_permissions: ['webRequestAuthProvider']} : {}),
   optional_host_permissions: tee ? tee.providers.map(entry => entry.schema.request.origin + '/*') : chatgpt ? ['https://chatgpt.com/*', ...(claude ? ['https://claude.ai/*'] : []), ...(grok ? ['https://grok.com/*'] : [])] : (privateFixture ? ['https://httpbingo.org/*'] : []),
   externally_connectable: {matches: [...new Set(matchPatternsFor(origins))]},
   cross_origin_embedder_policy: {value: 'require-corp'}, cross_origin_opener_policy: {value: 'same-origin'},
@@ -204,6 +236,7 @@ if(publishedConfig.qualificationResponseMetadata)delete publishedConfig.qualific
 await writeFile(join(out, 'build.json'), JSON.stringify({...publishedConfig, sourceRevision, sourceDirty,
   ...(qualification ? {qualificationOnly:true,qualification:qualification.declaration} : {}),
   ...(migrationQualification ? {qualificationOnly:true,qualification:migrationQualification.declaration} : {}),
+  ...(recoveryQualification ? {qualificationOnly:true,qualification:recoveryQualification.declaration} : {}),
   ...(localQualification ? {localQualification:{format:'pines-local-qualification-build-v1',version:'1.17.0',origin:origins[0],transport:tee.api}} : {}),
   ...(publicPrivateHeaders ? {publicRelease:{format:'pines-private-headers-public-package-v2',version:privateHeadersRelease.version,
     policySha256:createHash('sha256').update(await readFile(join(root, privateHeadersRelease.policyFile))).digest('hex'),

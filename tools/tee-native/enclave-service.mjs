@@ -1,7 +1,7 @@
 import {createServer} from 'node:http';
 import {WebSocket, WebSocketServer} from 'ws';
 import {check, decode, encode, exact, verify, digest} from './wire.mjs';
-import {channelBinding, checkGrant, makeReceipt, makeTerminal} from './protocol.mjs';
+import {channelBinding, checkGrant, makeReceiptAndFacts, makeTerminal, receiptFactsOf} from './protocol.mjs';
 import {FRAME, MAX_FRAME, receiver, sender} from './channel.mjs';
 import {startNative} from './native.mjs';
 import {providerForTicket} from './profile.mjs';
@@ -83,7 +83,7 @@ function retain(state) {
   retainedOffers.set(state.offer.body.session,state);
   state.timer=setTimeout(()=>forget(state),Math.max(1,state.ticket.body.resultExpiresAt-Date.now()));
 }
-async function terminalPacket(state,outcome,receipt) {
+async function terminalPacket(state,outcome,receipt,facts) {
   if(state.terminalPromise)return state.terminalPromise;
   // A grant can be up to two seconds ahead of the enclave clock. Record the
   // actual retirement time after that point; never synthesize a past timestamp.
@@ -91,7 +91,8 @@ async function terminalPacket(state,outcome,receipt) {
     if(Date.now()<state.grant.body.issuedAt)await new Promise(r=>setTimeout(r,state.grant.body.issuedAt-Date.now()));
     const terminal=await makeTerminal(state.ticket,state.offer,state.grant,outcome,receipt,state.receipt.privateKey,Date.now(),
       state.nativeStarted?{}:{nativeStarted:false});
-    const packet={terminal,receipt:receipt??null,ticket:state.ticket,offer:state.offer,grant:state.grant};
+    // The facts envelope (multi-exchange protocol §2.5) rides beside its receipt; it holds the e-mail's commitment only.
+    const packet={terminal,receipt:receipt??null,ticket:state.ticket,offer:state.offer,grant:state.grant,...(receipt&&facts?{facts}:{})};
     if(cfg.retainOutbox){
       const bytes=encode(packet);check(bytes.length<=OUTBOX_PACKET_BYTES && outbox.size<OUTBOX_EVENTS,'OUTBOX_LIMIT');
       outbox.set(await digest(bytes),packet);outboxBytes+=bytes.length;
@@ -216,7 +217,7 @@ wss.on('connection', ws => {
   const diagnosis=diagnostics.begin();
   if (draining || !resourcePolicy || wss.clients.size > capacity) {diagnosis.close('CONNECTION_REFUSED');ws.close(); return;}
   let state, native, starting, preparing, protocol, incoming, outgoing, binding, deadline, confirmed = false, finished = false, ended = false;
-  let signedReceipt, outcome = 'failed', validatingGrant, closure;
+  let signedReceipt, signedFacts, outcome = 'failed', validatingGrant, closure;
   let inputChain = Promise.resolve(), outputChain = Promise.resolve(), queued = 0, outboundQueued = 0,queuedMessages=0,outboundMessages=0,consumedInput=0;
   const nativeChunks=[];let nativeQueued=0,nativeOutputWork,nativeInFlight=false,nativePaused=false;
   const sending=new AbortController();
@@ -282,7 +283,7 @@ wss.on('connection', ws => {
     // Wait for a racing start before attesting physical termination.
     if (starting) {try {const child = await starting; await child.stop();} catch {}}
     await native?.stop(); if (native) owned.delete(native);
-    if (state && state.grantValid && (cfg.onTerminal || cfg.retainOutbox)) await terminalPacket(state,outcome,signedReceipt);
+    if (state && state.grantValid && (cfg.onTerminal || cfg.retainOutbox)) await terminalPacket(state,outcome,signedReceipt,signedFacts);
     })().finally(()=>{
       if (state) {if(!state.grantValid&&!state.nativeStarted)retain(state);else forget(state);}
       incoming?.destroy(); outgoing?.frames.destroy(); ws.close();closures.delete(closure);socketClosures.delete(ws);
@@ -376,16 +377,21 @@ wss.on('connection', ws => {
         try {await cfg.beforeReceipt?.();} catch(error) {void close('RECEIPT_PREPARATION_REFUSED');throw error;}
         check(!ended,'CLOSED');
         if(Date.now()>=state.grant.body.deadline){void close('SESSION_DEADLINE');throw Error('SESSION_DEADLINE');}
-        const receipt = await makeReceipt(state.ticket, state.offer, state.grant, result.facts, state.receipt.privateKey);
-        signedReceipt = receipt; outcome = 'completed';
-        let response=receipt;
+        // The e-mail (multi-exchange protocol §2.5) is never a fact value: the facts envelope carries its commitment under
+        // this session, and the address goes to the client in the RESULT frame's `transient` member only — never into
+        // the terminal packet, the outbox or any retained copy. The receipt itself keeps its fixed key set; the facts are
+        // signed beside it under the same key, bound to its hash (protocol.mjs makeReceiptFacts).
+        const {facts: evaluatedFacts, transient} = await receiptFactsOf(result.facts, state.offer.body.session);
+        const {receipt, facts} = await makeReceiptAndFacts(state.ticket, state.offer, state.grant, evaluatedFacts, state.receipt.privateKey);
+        signedReceipt = receipt; signedFacts = facts; outcome = 'completed';
+        let response=transient||facts?{receipt,...(facts?{facts}:{}),...(transient?{transient}:{})}:receipt;
         if(state.offer.body.identity){
           check(cfg.identityAdapter?.enabled===true&&typeof result.facts.accountId==='string','KEYED_IDENTITY_REQUIRED');
           // Use enclave-to-client exporter: client-to-enclave is already FINISHed.
           const accountConfirmation=await outgoing.frames.accountConfirmation(accountConfirmationMessage(
             state.offer.body.identity,providerForTicket(state.ticket.body),result.facts.accountId,result.facts.pseudonym));
           delete result.facts.accountId;
-          response={receipt,accountConfirmation};
+          response={receipt,...(facts?{facts}:{}),accountConfirmation,...(transient?{transient}:{})};
         }
         await send(FRAME.RESULT, encode(response)); await send(FRAME.FINISH); await close('COMPLETED');
       } else throw Error('FRAME_ORDER');

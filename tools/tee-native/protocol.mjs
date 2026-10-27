@@ -12,8 +12,31 @@ import {LIMITS, schema, SIMULATION, providersFor, isHardwareProfile, providerFor
 import {SESSION_POLICY_FIELDS, validateSessionPolicySnapshot} from './session-policy.mjs';
 import {disclosurePolicy} from './disclosure-policy.mjs';
 import {checkIdentityBinding} from './identity-binding.mjs';
+import {RECEIPT_VALUE_FIELDS, emailCommitment} from '../../packages/verification-schemas/src/sybil/facts.ts';
 
-export const DOMAIN = Object.freeze({ticket: 'pines/tee/ticket/v1', grant: 'pines/tee/grant/v1', receipt: 'pines/tee/receipt/v1', lifecycle: 'pines/tee/lifecycle/v1', simulation: 'pines/tee/SIMULATION-NOT-ATTESTATION/v1'});
+// The receipt facts (identity policy specification §4; multi-exchange protocol §1.4, §2.5): the receipt value fields, from
+// every exchange of the session. They are NOT on the receipt: the receipt keeps its fixed key set, the one the signing
+// enclave S and the identity's pre-check accept (tools/tee-signing/protocol/saved-receipt.mjs, runtime/src/auth.rs).
+// The enclave signs them in a second, domain-separated envelope under the same receipt key, bound to that receipt by
+// its hash, its attempt and its session (`makeReceiptFacts`/`checkReceiptFacts`). Closed keys, bounded values, never a
+// raw account id, never the e-mail address (its commitment only).
+const FACT_VALUE_FIELDS = RECEIPT_VALUE_FIELDS;
+/** The signed facts and the non-retained transient of an evaluation: the e-mail becomes its commitment under the session. */
+export async function receiptFactsOf(evaluated, session) {
+  const {transient, ...facts} = evaluated;
+  if (transient?.email === undefined) return {facts, transient: undefined};
+  check(typeof transient.email === 'string', 'RECEIPT_VALUES');
+  return {facts: {...facts, values: {...(facts.values ?? {}), pines_email_commitment: await emailCommitment(session, transient.email)}}, transient: {email: transient.email}};
+}
+export function checkReceiptValues(values) {
+  check(values !== null && typeof values === 'object' && !Array.isArray(values), 'RECEIPT_VALUES');
+  const keys = Object.keys(values);
+  check(keys.length >= 1 && keys.length <= FACT_VALUE_FIELDS.length && keys.every(key => FACT_VALUE_FIELDS.includes(key)), 'RECEIPT_VALUES');
+  for (const value of Object.values(values)) check(typeof value === 'string' ? value.length > 0 && value.length <= 254 : Number.isSafeInteger(value) && value >= 0, 'RECEIPT_VALUES');
+  return values;
+}
+
+export const DOMAIN = Object.freeze({ticket: 'pines/tee/ticket/v1', grant: 'pines/tee/grant/v1', receipt: 'pines/tee/receipt/v1', facts: 'pines/tee/receipt-facts/v1', lifecycle: 'pines/tee/lifecycle/v1', simulation: 'pines/tee/SIMULATION-NOT-ATTESTATION/v1'});
 export const schemaDigest = (profile = SIMULATION, selectedPolicy) => {
   const provider = providersFor(selectedPolicy).find(p => p.profile === profile);
   check(provider || profile === SIMULATION, 'PROFILE');
@@ -167,7 +190,34 @@ export async function checkTerminal(terminal, ticket, offer, grant, apiKey, poli
 }
 
 export async function makeReceipt(ticket, offer, grant, facts, key, now = Date.now()) {
+  // Facts never ride the receipt (above): a caller with values signs them with makeReceiptFacts beside it.
+  check(facts.values === undefined, 'RECEIPT_VALUES_ENVELOPE');
   return sign(DOMAIN.receipt, (await makeReceiptShape(ticket, offer, grant, {...facts, issuedAt: now})).body, key);
+}
+/** The facts envelope beside a signed receipt: its values, bound to that receipt's hash, attempt and session. */
+export async function makeReceiptFacts(receipt, values, key) {
+  checkReceiptValues(values);
+  return sign(DOMAIN.facts, {attempt: receipt.body.attempt, session: receipt.body.session, receiptHash: await envelopeDigest(receipt), values}, key);
+}
+/** A receipt and, when the facts carry values, its facts envelope: what one completed session signs. */
+export async function makeReceiptAndFacts(ticket, offer, grant, facts, key, now = Date.now()) {
+  const {values, ...receiptFacts} = facts;
+  const receipt = await makeReceipt(ticket, offer, grant, receiptFacts, key, now);
+  return {receipt, facts: values === undefined ? undefined : await makeReceiptFacts(receipt, values, key)};
+}
+/**
+ * The facts envelope of an ALREADY CHECKED receipt (checkReceipt first: it authenticates the receipt, its offer, grant
+ * and ticket). The envelope must be signed by the same receipt key (the offer's), name the receipt's hash, attempt and
+ * session, and carry closed, bounded values. With `expectedValues` (the client's local evaluation) they must be equal.
+ */
+export async function checkReceiptFacts(envelope, receipt, offer, expectedValues) {
+  const f = await verify(DOMAIN.facts, envelope, offer.body.receiptKey);
+  exact(f, ['attempt', 'session', 'receiptHash', 'values']);
+  check(f.attempt === receipt.body.attempt && f.session === receipt.body.session && f.session === offer.body.session
+    && f.receiptHash === await envelopeDigest(receipt), 'RECEIPT_FACTS_CONTEXT');
+  checkReceiptValues(f.values);
+  if (expectedValues !== undefined) check(digestEqual(f.values, expectedValues), 'LOCAL_FACTS');
+  return f.values;
 }
 
 export async function checkReceipt(receipt, ticket, offer, grant, apiKey, policy, expectedFacts, now = Date.now()) {
@@ -194,7 +244,9 @@ export async function checkReceipt(receipt, ticket, offer, grant, apiKey, policy
     && r.issuedAt < grant.body.deadline && now < r.expiresAt, 'RECEIPT_EXPIRED');
   check(Number.isSafeInteger(r.sentBytes) && r.sentBytes > 0 && r.sentBytes <= LIMITS.maxSentBytes
     && Number.isSafeInteger(r.recvBytes) && r.recvBytes > 0 && r.recvBytes <= LIMITS.maxRecvBytes, 'RECEIPT_LIMIT');
-  if (expectedFacts) for (const k of [...(offer.body.identity?[]:['pseudonym']), 'plan', 'sentBytes', 'recvBytes']) check(r[k] === expectedFacts[k], 'LOCAL_FACTS');
+  if (expectedFacts) {
+    for (const k of [...(offer.body.identity?[]:['pseudonym']), 'plan', 'sentBytes', 'recvBytes']) check(r[k] === expectedFacts[k], 'LOCAL_FACTS');
+  }
   return {namespace: offer.body.identity?`${provider.id}-private-keyed-v2`:provider?.identityNamespace ?? 'chatgpt-private-account-v1', subjectKey: r.pseudonym, plan: r.plan};
 }
 async function makeReceiptShape(ticket, offer, grant, facts) {

@@ -1,0 +1,229 @@
+Multi-request session for the proxy prover. Applies to tlsnotary/tlsn
+47aee45b53e06648c1b2ad3689b367b8c923fdec (v0.1.0-alpha.15) after
+0001-await-io-write.patch.
+
+Adds, and changes nothing that exists: `SdkProver::send_requests_proxy` in
+sdk-core and `Prover.send_requests(server_io, requests)` in the wasm bindings.
+The requests are sent in order over ONE TLS connection through hyper's single
+HTTP/1.1 connection, without pipelining: each response is read to its end
+before the next request is written, so the transcript is req1 resp1 req2
+resp2 of one session. The caller's last request carries `connection: close`
+(the schema package builds it). Every response is returned. The prover is left
+`Committed`, exactly as after `send_request`, for the same `transcript()` and
+`reveal()`. Every request is built before the connection opens. Proxy mode
+only; `server_io` must be omitted. `send_request`, the protocol, the
+commitments, the reveal and the verifier are untouched.
+
+diff --git a/crates/sdk-core/src/prover.rs b/crates/sdk-core/src/prover.rs
+index 4a0aff5e9..9856e525c 100644
+--- a/crates/sdk-core/src/prover.rs
++++ b/crates/sdk-core/src/prover.rs
+@@ -305,6 +305,85 @@ impl SdkProver {
+         Ok(response)
+     }
+ 
++    /// Sends several HTTP requests to the server via the proxy, in order, over
++    /// one TLS connection.
++    ///
++    /// This method is used for proxy mode only. Each response is read to its
++    /// end before the next request is written, so the transcript is
++    /// `request 1, response 1, request 2, response 2, ...` of one TLS
++    /// session. The caller's last request carries `connection: close`. Every
++    /// response is returned, and the prover is left in the same state as
++    /// after [`Self::send_request_proxy`].
++    ///
++    /// # Arguments
++    ///
++    /// * `requests` - The HTTP requests to send, at least one.
++    pub async fn send_requests_proxy(
++        &mut self,
++        requests: Vec<HttpRequest>,
++    ) -> Result<Vec<HttpResponse>> {
++        if requests.is_empty() {
++            return Err(SdkError::config("at least one request is required"));
++        }
++
++        // Every request is built before the connection opens, so a request
++        // that cannot be built sends nothing.
++        let requests = requests
++            .into_iter()
++            .map(hyper::Request::<Full<Bytes>>::try_from)
++            .collect::<Result<Vec<_>>>()?;
++
++        let State::CommitAcceptedProxy { prover, handle } = self.state.take() else {
++            return Err(SdkError::invalid_state(
++                "prover is not in commit accepted proxy state",
++            ));
++        };
++
++        let tls_config = self.build_tls_config()?;
++
++        info!("connecting to proxy");
++
++        let (tls_conn, prover) = prover
++            .connect(tls_config)
++            .map_err(|e| SdkError::protocol(e.to_string()))?;
++
++        info!("sending {} requests", requests.len());
++
++        let (responses, prover) = match futures::try_join!(
++            async {
++                let result = send_requests(tls_conn, requests).await;
++                info!(
++                    "send_requests completed with result: {:?}",
++                    result.as_ref().map(|_| "Ok").map_err(|e| e.to_string())
++                );
++                result
++            },
++            async {
++                let result = prover.await;
++                info!(
++                    "prover completed with result: {:?}",
++                    result.as_ref().map(|_| "Ok").map_err(|e| e.to_string())
++                );
++                result.map_err(|e| SdkError::protocol(e.to_string()))
++            }
++        ) {
++            Ok(result) => {
++                info!("try_join succeeded");
++                result
++            }
++            Err(e) => {
++                error!("try_join failed: {}", e);
++                return Err(e);
++            }
++        };
++
++        info!("responses received, prover transitioning to Committed state");
++
++        self.state = State::Committed { prover, handle };
++
++        Ok(responses)
++    }
++
+     fn build_tls_config(&self) -> Result<TlsClientConfig> {
+         let mut builder = TlsClientConfig::builder()
+             .server_name(ServerName::Dns(
+@@ -517,6 +596,64 @@ async fn send_request(conn: TlsConnection, request: HttpRequest) -> Result<HttpR
+     })
+ }
+ 
++/// Sends the requests in order on one HTTP/1.1 connection, without
++/// pipelining: each response body is read to its end before the next request
++/// is written.
++async fn send_requests(
++    conn: TlsConnection,
++    requests: Vec<hyper::Request<Full<Bytes>>>,
++) -> Result<Vec<HttpResponse>> {
++    let conn = HyperIo::new(conn);
++
++    let (mut request_sender, conn) = hyper::client::conn::http1::handshake(conn).await?;
++
++    crate::spawn::spawn(async move {
++        if let Err(e) = conn.await {
++            tracing::error!("HTTP connection error: {e}");
++        }
++    });
++
++    let mut responses = Vec::with_capacity(requests.len());
++    for request in requests {
++        // Resolves once the previous exchange has completed and the
++        // connection is still open; fails if the connection has closed.
++        request_sender.ready().await?;
++
++        let response = request_sender.send_request(request).await?;
++
++        let (response, body) = response.into_parts();
++
++        let body = body
++            .collect()
++            .await
++            .map_err(|e| SdkError::http(e.to_string()))?;
++        let body_bytes = body.to_bytes().to_vec();
++
++        let headers = response
++            .headers
++            .into_iter()
++            .map(|(k, v)| {
++                (
++                    k.map(|k| k.to_string()).unwrap_or_default(),
++                    v.as_bytes().to_vec(),
++                )
++            })
++            .collect();
++
++        responses.push(HttpResponse {
++            status: response.status.as_u16(),
++            headers,
++            body: if body_bytes.is_empty() {
++                None
++            } else {
++                Some(body_bytes)
++            },
++        });
++    }
++
++    Ok(responses)
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+diff --git a/crates/wasm/src/prover/mod.rs b/crates/wasm/src/prover/mod.rs
+index 56bbb5769..d2d56367d 100644
+--- a/crates/wasm/src/prover/mod.rs
++++ b/crates/wasm/src/prover/mod.rs
+@@ -117,6 +117,53 @@ impl JsProver {
+         Ok(convert_http_response(core_response))
+     }
+ 
++    /// Sends several HTTP requests to the server, in order, over one TLS
++    /// connection, and returns every response.
++    ///
++    /// Proxy mode only. Each response is read to its end before the next
++    /// request is written; the last request carries `connection: close`.
++    ///
++    /// # Arguments
++    ///
++    /// * `server_io` - Must be `None`: the connection is routed through the
++    ///   verifier, as for `send_request` in proxy mode.
++    /// * `requests` - The HTTP requests to send, at least one.
++    pub async fn send_requests(
++        &mut self,
++        server_io: Option<JsIo>,
++        requests: Vec<HttpRequest>,
++    ) -> Result<Vec<HttpResponse>> {
++        self.emit_progress(
++            "CONNECTING_TO_SERVER",
++            0.3,
++            "Connecting to application server...",
++        );
++
++        let core_requests = requests.into_iter().map(convert_http_request).collect();
++
++        self.emit_progress("SENDING_REQUEST", 0.4, "Sending requests...");
++
++        let core_responses = match (self.inner.mode(), server_io) {
++            (ProverMode::Proxy, None) => self.inner.send_requests_proxy(core_requests).await,
++            (ProverMode::Proxy, Some(_)) => {
++                return Err(JsError::new("server_io must not be provided in proxy mode"));
++            }
++            (ProverMode::Mpc, _) => {
++                return Err(JsError::new(
++                    "send_requests is supported in proxy mode only",
++                ));
++            }
++        }
++        .map_err(|e| JsError::new(&e.to_string()))?;
++
++        self.emit_progress("REQUEST_COMPLETE", 0.5, "Responses received");
++
++        Ok(core_responses
++            .into_iter()
++            .map(convert_http_response)
++            .collect())
++    }
++
+     /// Returns the transcript of the TLS session.
+     pub fn transcript(&self) -> Result<Transcript> {
+         let core_transcript = self

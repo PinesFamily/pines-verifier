@@ -1,0 +1,26 @@
+{
+  "format": "pines-verification-schema-v1",
+  "schemaId": "pines.fixture.bench",
+  "version": 1,
+  "providerId": "PINES-BENCH-FIXTURE",
+  "lifecycle": "fixture",
+  "request": { "origin": "https://fixture.bench.pines.family", "method": "GET", "path": "/backend-api/wham/usage", "query": {}, "body": { "kind": "empty" } },
+  "capture": { "navigationUrl": "https://fixture.bench.pines.family/", "authOrigins": ["https://fixture.bench.pines.family"], "headers": [], "cookies": [] },
+  "replay": { "transform": "fixed-request-v1", "headers": { "accept": "application/json", "user-agent": "pines-bench/1.0" } },
+  "limits": {
+    "maxSentBytes": 8192, "maxRecvBytes": 65536, "maxHeaderBytes": 8192,
+    "maxBodyBytes": 49152, "maxJsonDepth": 32, "sessionTimeoutMs": 120000,
+    "maxRecvRecords": 1024, "concurrency": 1
+  },
+  "response": { "status": 200, "contentType": "application/json", "disclosure": "full-json-body" },
+  "fields": [
+    { "id": "plan_type", "pointer": "/plan_type", "type": "string" },
+    { "id": "user_id", "pointer": "/user_id", "type": "string" }
+  ],
+  "checks": [
+    { "op": "in", "field": "plan_type", "values": ["plus", "pro", "prolite"] },
+    { "op": "custom", "field": "user_id", "handler": "chatgpt-user-id-v1" }
+  ],
+  "identity": { "version": "pines-bench-user-v1", "kind": "field", "field": "user_id" },
+  "claims": { "enabled": false, "domain": "fixture.bench.pines.family", "templateIds": [] }
+}

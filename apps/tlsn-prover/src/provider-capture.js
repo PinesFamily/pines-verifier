@@ -69,6 +69,6 @@ export class ProviderCapture {
   }
   async #reject(lease, code) {
     if (!this.#live(lease)) return; this.cancel();
-    await this.#fail(/^CAPTURE_[A-Z_]+$/.test(code ?? '') || ['TICKET_EXPIRED', 'PROVIDER_SIGN_IN_REQUIRED', 'PROVIDER_HTTP_401', 'PROVIDER_HTTP_403', 'PROVIDER_HTTP_429', 'CLAUDE_ORG_UNAVAILABLE'].includes(code) ? code : 'CAPTURE_UNAVAILABLE');
+    await this.#fail(/^CAPTURE_[A-Z_]+$/.test(code ?? '') || ['TICKET_EXPIRED', 'PROVIDER_SIGN_IN_REQUIRED', 'PROVIDER_CHALLENGE', 'PROVIDER_HTTP_401', 'PROVIDER_HTTP_403', 'PROVIDER_HTTP_429', 'CLAUDE_ORG_UNAVAILABLE', 'ASSISTANCE_CLEARANCE_UNPROVEN'].includes(code) ? code : 'CAPTURE_UNAVAILABLE');
   }
 }

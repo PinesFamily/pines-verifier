@@ -34,6 +34,14 @@ export const RESOURCE_CLASSES = Object.freeze({
   // before any deployment. The same evidence holds a 512 MiB slot locally (12/12
   // RLIMIT_AS probes); an 8 KiB revealed cap would need 576 MiB.
   'private-headers-gzip-v1': Object.freeze({minNativeMemoryMiB: 448, maxNativeMemoryMiB: 4096}),
+  // Same enforced limits; this new profile still requires its own hardware evidence.
+  'grok-clearance-private-v1': Object.freeze({minNativeMemoryMiB: 448, maxNativeMemoryMiB: 4096}),
+  // The sybil-facts class (disclosure-policy.mjs FACTS_COMPLETE): the reveal-all response path of full-response-v1
+  // with the facts sessions' sizes, so the same experimental floor; UNMEASURED on hardware, like full-response-v1.
+  'facts-complete-v1': Object.freeze({minNativeMemoryMiB: 512, maxNativeMemoryMiB: 4096}),
+  // Same enforced complete-response bounds; one-slot hardware qualification is
+  // required for the combined email and clearance profile before admission.
+  'grok-email-complete-v1': Object.freeze({minNativeMemoryMiB: 512, maxNativeMemoryMiB: 4096}),
 });
 const ALLOCATION = Object.freeze({minCpu: 2, maxCpu: 64, minMemoryMiB: 2048, maxMemoryMiB: 262144});
 export const CAPACITY_SELECTION_FIELDS = Object.freeze(['resourceClass', 'proofSlots', 'nativeMemoryMiB', 'enclaveCpu', 'enclaveMemoryMiB']);

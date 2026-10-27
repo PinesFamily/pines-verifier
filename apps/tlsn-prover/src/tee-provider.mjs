@@ -16,7 +16,7 @@ export const nativeServiceOf = schemaId => Object.hasOwn(services, schemaId) ? s
 export function nativePlanValues(reference) {
   const service = nativeServiceOf(reference?.schemaId);
   // ChatGPT 6, Claude 3 and Grok 3 are the private-headers-gzip-v1 native versions (plan D4); same plan vocabulary.
-  if (!service || !(service === 'chatgpt' ? [3, 4, 5, 6] : [1, 2, 3]).includes(reference.version)) return [];
+  if (!service || !(service === 'chatgpt' ? [3, 4, 5, 6] : service === 'grok' ? [1, 2, 3, 5, 6] : [1, 2, 3]).includes(reference.version)) return [];
   return Object.keys(labels[service]).filter(plan => !(service === 'chatgpt' && reference.version === 3 && plan === 'promax'));
 }
 export function nativePlanLabel(reference, plan) {

@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "qualified": true,
+  "source": "Chromium DevTools structural review of a signed-in session, 2026-10-04; identity encoding requested and uncompressed response observed. No response values exported.",
+  "observationSha256": "5d0c136b62559c1f46bc7c5c907af0612a5b3ece5e72291113eb80e907ea683a",
+  "observedAt": "2026-10-04T03:07:49.159Z",
+  "credentialResponseHeaders": [
+    "set-cookie",
+    "x-oai-is-update"
+  ],
+  "review": "Header names only: the body is no longer held to an observed per-field shape. tools/tee-native/inventory.mjs refuses before reveal any response header name not listed here and any credential in the body, meaning a non-empty string under a credential-named key or a string in a known credential format. The complete body is disclosed only inside the measured enclave, and the schema's selector and checks judge every field a decision reads. Opaque x-oai-is-update is conservatively secret; complete values must be redacted.",
+  "responseHeaders": [
+    "cf-cache-status",
+    "cf-ray",
+    "connection",
+    "content-length",
+    "content-type",
+    "cross-origin-opener-policy",
+    "date",
+    "nel",
+    "referrer-policy",
+    "report-to",
+    "server",
+    "set-cookie",
+    "strict-transport-security",
+    "transfer-encoding",
+    "x-content-type-options",
+    "x-oai-is-update",
+    "x-oai-request-id",
+    "x-openai-proxy-wasm"
+  ]
+}

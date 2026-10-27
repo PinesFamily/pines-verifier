@@ -1,0 +1,27 @@
+{
+  "format": "pines-gm1026-recovery-release-v1",
+  "status": "Prepared recovery release. Consult live identity discovery and the owner-signed manifest for activation. Ordinary provider proof and Grok email hardware transport passed; actual website acceptance is a separate completion criterion.",
+  "enclave": {
+    "sourceCommit": "aab64b4ae7f4ac54286f10dc5011e0096d46a135",
+    "sourceEpoch": 1792297388,
+    "apiPublicKeyFile": "gm1026-recovery-public-keys.json",
+    "contextManifestSha256": "1b463242fcc9d7958818ee9ccd943d6cffe6886c6597e995156931c16038d6d1",
+    "contextFilesSha256": "80434f6247819c5b67819200e087982cf45da52c5bdd6dde8c006e77e087624b",
+    "contextFiles": 164,
+    "pcrs": [
+      "2ced2fc3326c32d4438e048bc23f537e65cfb4391d7b1bc02a4f9c268ed892d2b4be474af2128277eb54aa8041a81224",
+      "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
+      "e8330b01d8992ee72bebf6c17e815badcbf2af342d3ae15c1ecd37295506df52c1f53f5f5e2a3baa5d42d6adbdc957aa"
+    ],
+    "executables": {
+      "node": "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068",
+      "pines-nitro-runtime": "5d0a718e4e877ac828688c0dd4b84825cf6eb28136bfab2160b7867230be08fb",
+      "tee-hardware": "3dffc6178ed7076900f84cb4b7a23478f585f41dd1698989bbc2709b26245868",
+      "tee-identity": "b6f99bd5adb282ebce56832a28120c81b776cbf59ea73737be122ea7c58ba838"
+    },
+    "selectedEifSha256": "75f3a85fab0c470d2de8a374210d7025736e4c7921f7378d7f5de831ca160900"
+  },
+  "attestationWasm": {
+    "sha256": "dad876167a51019dcb81495552a48ca20da285487d3a9c2ead43aff288b224bf"
+  }
+}

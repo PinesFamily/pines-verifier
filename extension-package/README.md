@@ -1,12 +1,12 @@
-# Pines Verifier 1.19.0: the installed package as text
+# Pines Verifier 1.20.1: the installed package as text
 
-The site serves Pines Verifier 1.19.0 (extension id `lanmbpkmblcijblbllbikenpnceidmpj`) as a ZIP for a manual, unpacked
-install; its SHA-256 is `8667563d9fedfcc3e7fdd478f2db49f2281fac8e9ec39a5e9ff8eee2758693aa`. The site's Install buttons lead to the Chrome Web Store listing under
+The site serves Pines Verifier 1.20.1 (extension id `lanmbpkmblcijblbllbikenpnceidmpj`) as a ZIP for a manual, unpacked
+install; its SHA-256 is `4aed6869f5dcb1423fb8f7e14d70851dc33ab4ce11f755630a0ff03298daecf3`. The site's Install buttons lead to its ZIP install page until the Chrome Web Store publishes this version under
 the same id, which is uploaded separately, so the store's version can trail this package's.
 
 For a reader who cannot open the ZIP, this directory holds three of its files verbatim and the SHA-256 of every file in it:
 
-- `manifest.json`: the permissions, the content security policy (the one origin it may connect to) and the pages allowed to call it.
+- `manifest.json`: the permissions, the content security policy (its allowed connection origins) and the pages allowed to call it.
 - `config.js`: the enclave policy the extension pins, with its PCR0/PCR1/PCR2, and the provider schemas.
 - `build.json`: the build record, naming the commits of the private development repository it was built and packaged from; this repository is a path-for-path export of that repository.
 - `SHA256SUMS`: every file in the package.

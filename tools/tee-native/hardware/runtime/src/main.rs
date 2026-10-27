@@ -205,6 +205,10 @@ fn native_disclosure_memory(policy: &str, value: &str) -> Result<()> {
         // The private-headers class floor (capacity-policy.mjs RESOURCE_CLASSES): local
         // generated-data evidence, 448 MiB; the hardware campaign confirms or raises it.
         "private-headers-gzip-v1" => require(value.parse::<u64>()? >= 448),
+        "grok-clearance-private-v1" => require(value.parse::<u64>()? >= 448),
+        // The sybil-facts class: full-response's reveal-all path and experimental floor (capacity-policy.mjs).
+        "facts-complete-v1" => require(value.parse::<u64>()? >= 512),
+        "grok-email-complete-v1" => require(value.parse::<u64>()? >= 512),
         _ => require(false),
     }
 }
@@ -319,12 +323,41 @@ async fn from_vsock(
     limit: u64,
     permits: Arc<Semaphore>,
 ) -> Result<()> {
+    from_vsock_route(port, expected_peers, destination, limit, permits, false).await
+}
+
+// Fixed routing by worker CID, never by an inferred attempt or browser input.
+// The trusted parent adapters on these loopback ports have pinned mTLS routes.
+fn group_destination(cid: u32, port: u32) -> Result<&'static str> {
+    match (cid, port) {
+        (16, 8001) => Ok("chatgpt.com:443"),
+        (16, 8002) => Ok("claude.ai:443"),
+        (16, 8003) => Ok("grok.com:443"),
+        (17, 8001) => Ok("127.0.0.1:28001"),
+        (17, 8002) => Ok("127.0.0.1:28002"),
+        (17, 8003) => Ok("127.0.0.1:28003"),
+        _ => Err("GROUP_ROUTE_REFUSED".into()),
+    }
+}
+async fn from_vsock_route(
+    port: u32,
+    expected_peers: &'static [u32],
+    destination: &'static str,
+    limit: u64,
+    permits: Arc<Semaphore>,
+    group_routed: bool,
+) -> Result<()> {
     let listen = VsockListener::bind(VsockAddr::new(libc::VMADDR_CID_ANY, port))?;
     loop {
         let (socket, peer) = listen.accept().await?;
         if !expected_peers.contains(&peer.cid()) {
             continue;
         }
+        let destination = if group_routed {
+            group_destination(peer.cid(), port)?
+        } else {
+            destination
+        };
         let Ok(permit) = permits.clone().try_acquire_owned() else {
             continue;
         };
@@ -366,6 +399,28 @@ async fn from_tcp(
 }
 async fn bridge(mode: &str) -> Result<()> {
     match mode {
+        // Isolated, nonclaimable settings image only. Separate fixed ports keep
+        // the shared production egress listener available during qualification.
+        "enclave-settings-egress" => {
+            from_tcp(
+                "127.0.0.1:18003",
+                3,
+                8103,
+                131072,
+                Arc::new(Semaphore::new(1)),
+            )
+            .await
+        }
+        "parent-settings-egress" => {
+            from_vsock(
+                8103,
+                &[17],
+                "127.0.0.1:28003",
+                131072,
+                Arc::new(Semaphore::new(1)),
+            )
+            .await
+        }
         "enclave-ingress" => {
             from_vsock(
                 8000,
@@ -414,7 +469,7 @@ async fn bridge(mode: &str) -> Result<()> {
             )
             .await
         }
-        "parent-egress" | "parent-colocated-egress" => {
+        "parent-egress" | "parent-colocated-egress" | "parent-colocated-assisted-egress" => {
             let permits = Arc::new(Semaphore::new(MAX_PROOF_SLOTS));
             let [a, b, c] = PROVIDER_ROUTES;
             let peers: &'static [u32] = if mode == "parent-egress" {
@@ -422,10 +477,32 @@ async fn bridge(mode: &str) -> Result<()> {
             } else {
                 &[16, 17]
             };
+            let grouped = mode == "parent-colocated-assisted-egress";
             tokio::try_join!(
-                from_vsock(a.vsock, peers, a.destination, 131072, permits.clone()),
-                from_vsock(b.vsock, peers, b.destination, 131072, permits.clone()),
-                from_vsock(c.vsock, peers, c.destination, 131072, permits.clone())
+                from_vsock_route(
+                    a.vsock,
+                    peers,
+                    a.destination,
+                    131072,
+                    permits.clone(),
+                    grouped
+                ),
+                from_vsock_route(
+                    b.vsock,
+                    peers,
+                    b.destination,
+                    131072,
+                    permits.clone(),
+                    grouped
+                ),
+                from_vsock_route(
+                    c.vsock,
+                    peers,
+                    c.destination,
+                    131072,
+                    permits.clone(),
+                    grouped
+                )
             )?;
             Ok(())
         }
@@ -519,6 +596,23 @@ async fn main() {
 mod tests {
     use super::*;
     use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt};
+    #[test]
+    fn assisted_group_has_fixed_routes_and_parent_direct_is_preserved() {
+        for (port, direct, assisted) in [
+            (8001, "chatgpt.com:443", "127.0.0.1:28001"),
+            (8002, "claude.ai:443", "127.0.0.1:28002"),
+            (8003, "grok.com:443", "127.0.0.1:28003"),
+        ] {
+            assert_eq!(group_destination(16, port).unwrap(), direct);
+            assert_eq!(group_destination(17, port).unwrap(), assisted);
+            for cid in [0, 1, 2, 3, 18, u32::MAX] {
+                assert!(group_destination(cid, port).is_err());
+            }
+        }
+        for port in [22, 443, 8000, 8004, 9000, u32::MAX] {
+            assert!(group_destination(17, port).is_err());
+        }
+    }
     #[test]
     fn colocated_verifier_peers_exclude_signer_and_parent() {
         assert!(verifier_peer(16));

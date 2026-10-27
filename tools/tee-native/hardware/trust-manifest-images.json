@@ -1,0 +1,12 @@
+{
+  "purpose": "Public provenance of each admitted verifier image, by PCR0, for sign-manifest.mjs build: the public build that reproduces it (reproduce/reviewed-v-20261019.json), its label, and the unix second from which receipts it verified are covered. The operator confirms admittedFrom against the image's first live admission before the owner signs.",
+  "images": [
+    {
+      "pcr0": "cc3a72e385ca576097f9170fcc3ee6e3005c74b0417f72b4f183f103f4f754eb95d100f5d1e326a991eeaad4fc8e99fa",
+      "label": "reviewed-v-20261019",
+      "buildCommit": "aab64b4ae7f4ac54286f10dc5011e0096d46a135",
+      "imageLabel": "pines-tee-v5-reviewed-20261019",
+      "admittedFrom": 1792454400
+    }
+  ]
+}

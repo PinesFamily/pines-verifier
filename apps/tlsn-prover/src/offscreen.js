@@ -3,6 +3,9 @@ import config from './config.js';
 import {metadataPersistenceFailureCode} from './qualification-metadata-channel.mjs';
 const manager = new ProveManager(state => { void chrome.runtime.sendMessage({target: 'background', type: 'worker-state', state}).catch(() => {}); }, {
   teeProviders: config.tee?.providers,
+  assistanceProviders: config.grokAssistance?.enabled === true ? config.grokAssistance.tee.providers : null,
+  manifestRequired: config.tee?.manifest?.required === true,
+  assistanceManifestRequired: config.grokAssistance?.tee?.manifest?.required === true,
   replayMetadata:config.qualificationResponseMetadata?async record=>{
     let result;
     try{result=await chrome.runtime.sendMessage({target:'background',type:'replay-metadata',record});}catch{throw Error('REPLAY_METADATA_BRIDGE_FAILED');}

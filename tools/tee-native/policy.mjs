@@ -51,5 +51,8 @@ export async function policyForSchema(set, reference, selectedPolicy) {
         && new Set(p[field]).size === p[field].length, 'POLICY_REVOCATIONS');
     }
   }
-  return set.providers.find(entry => entry.id === provider.id)?.policy ?? null;
+  // The row must name this provider's own schema: with two generations of a class (multi-exchange protocol §2.6) a set
+  // written for one must never hand its policy to the other's reference.
+  const row = set.providers.find(entry => entry.id === provider.id);
+  return row && ['schemaId', 'version', 'digest'].every(key => row.schema[key] === provider.reference[key]) ? row.policy : null;
 }

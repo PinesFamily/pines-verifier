@@ -89,5 +89,5 @@ export function validateAttempt(attempt, recipient, reference, schema, config, n
   return ticket;
 }
 export function publicState(job) {
-  return job ? {runId: job.runId, attemptId: job.attemptId, recipient: job.recipient, schema: job.schema, phase: job.permissionPending && job.phase === 'awaiting-capture' ? 'awaiting-permission' : job.phase, error: job.error ?? null, claimable: false, ...(job.upfrontConsent ? {upfrontConsent: true, preparing: Boolean(job.preparing)} : {}), ...(job.preparing ? {preparationReady: job.upfrontConsent ? job.phase === 'ready' : !job.permissionPending && !terminal(job.phase)} : {}), ...(job.retryAt != null ? {retryAt: job.retryAt} : {})} : null;
+  return job ? {runId: job.runId, attemptId: job.attemptId, recipient: job.recipient, schema: job.schema, phase: job.permissionPending && job.phase === 'awaiting-capture' ? 'awaiting-permission' : job.phase, error: job.error ?? null, claimable: false, ...(job.assistanceNeeded ? {assistanceNeeded: true} : {}), ...(job.assisted ? {assisted: true} : {}), ...(job.upfrontConsent ? {upfrontConsent: true, preparing: Boolean(job.preparing)} : {}), ...(job.preparing ? {preparationReady: job.upfrontConsent ? job.phase === 'ready' : !job.permissionPending && !terminal(job.phase)} : {}), ...(job.retryAt != null ? {retryAt: job.retryAt} : {})} : null;
 }

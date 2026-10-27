@@ -1,6 +1,6 @@
 import { requireThat } from "./errors.ts";
 import { canonicalJson, parseJson } from "./json.ts";
-import { acceptEncoding, requestBody, requestTarget, requestUrl } from "./schema.ts";
+import { acceptEncoding, connectionHeader, exchangeViews, requestBody, requestTarget, requestUrl } from "./schema.ts";
 import { encoder } from "./http.ts";
 import type { CapturedRequest, ReplayRequest, VerificationSchema } from "./types.ts";
 
@@ -23,10 +23,23 @@ export function capturedFrom(schema: VerificationSchema, url: string, pathParams
 export type ReplayOptions = Readonly<{ pathParams?: Readonly<Record<string, string>> }>;
 
 export function prepareReplay(schema: VerificationSchema, captured: CapturedRequest, options: ReplayOptions = {}): ReplayRequest {
+  return buildReplay(schema, captured, options, true, true);
+}
+/**
+ * The ordered replays of a multi-exchange session, every one built from the ONE captured
+ * request: the credential captured for the first exchange sends them all, each exchange's
+ * own headers are taken from the same capture, and only the last request closes the
+ * session. A single-exchange schema yields exactly `[prepareReplay(...)]`.
+ */
+export function prepareReplays(schema: VerificationSchema, captured: CapturedRequest, options: ReplayOptions = {}): readonly ReplayRequest[] {
+  // A declared path parameter belongs to the first request alone; later paths are literals.
+  return Object.freeze(exchangeViews(schema).map(view => buildReplay(view.schema, captured, view.index === 0 ? options : {}, view.final, view.index === 0)));
+}
+function buildReplay(schema: VerificationSchema, captured: CapturedRequest, options: ReplayOptions, final: boolean, matchUrl: boolean): ReplayRequest {
   // A declared template is instantiated before anything else, so a missing or
   // malformed parameter refuses here rather than producing a request to nowhere.
   const target = requestTarget(schema, options.pathParams);
-  requireThat(captured.method === schema.request.method && capturedFrom(schema, captured.url, options.pathParams), "INVALID_CAPTURE");
+  requireThat(captured.method === schema.request.method && (!matchUrl || capturedFrom(schema, captured.url, options.pathParams)), "INVALID_CAPTURE");
   requireThat(Array.isArray(captured.headers) && captured.headers.length <= 128, "INVALID_CAPTURE");
   const original = new Map<string, string>();
   for (const header of captured.headers) {
@@ -48,13 +61,13 @@ export function prepareReplay(schema: VerificationSchema, captured: CapturedRequ
       const separator = part.indexOf("=");
       if (separator < 1) continue;
       const name = part.slice(0, separator).trim();
-      if (!schema.capture.cookies.includes(name)) continue;
+      if (!schema.capture.cookies.includes(name) && !schema.capture.optionalCookies?.includes(name)) continue;
       const value = part.slice(separator + 1).trim();
       requireThat(!cookies.has(name) && /^[\x21-\x7e]+$/.test(value), "INVALID_CAPTURE");
       cookies.set(name, value);
     }
     // Triggered capture exists only to carry the jar, so a jar missing any named cookie is no capture.
-    if (schema.capture.trigger) requireThat(cookies.size === schema.capture.cookies.length, "INVALID_CAPTURE");
+    if (schema.capture.trigger) requireThat(schema.capture.cookies.every(name => cookies.has(name)), "INVALID_CAPTURE");
     if (cookies.size) headers.cookie = [...cookies].map(([name, value]) => `${name}=${value}`).join("; ");
   }
   const body = requestBody(schema);
@@ -65,7 +78,7 @@ export function prepareReplay(schema: VerificationSchema, captured: CapturedRequ
   // One derivation, shared with both request validators: gzip only when the schema's
   // privacy block lists it, identity otherwise. `replay.headers` still refuses to name it.
   headers["accept-encoding"] = acceptEncoding(schema);
-  headers.connection = "close";
+  headers.connection = connectionHeader(final);
   if (schema.request.method === "POST") headers["content-length"] = String(encoder.encode(body).length);
   const wire = `${schema.request.method} ${target} HTTP/1.1\r\n` + Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`).join("") + "\r\n" + body;
   requireThat(encoder.encode(wire).length <= schema.limits.maxSentBytes, "LIMIT_EXCEEDED");

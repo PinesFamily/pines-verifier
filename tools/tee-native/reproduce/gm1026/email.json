@@ -1,0 +1,27 @@
+{
+  "format": "pines-recovery-image-v1",
+  "name": "email",
+  "sourceCommit": "8de7bee669ab41e232987804391c1884a0ca166c",
+  "sourceEpoch": 1792990479,
+  "profile": "grok-email",
+  "contextManifestSha256": "9ce8c1c9b2a33c83e4fee446fe72c8c709db3b3f79e6250c801d8340c728bd9a",
+  "contextFiles": 179,
+  "pcrs": [
+    "ee7d94fe238ba8d0717b3543c74a927036de8aaac7e9a6c1ee027c51f108d75827fd2f25fffb4b43d6ed0e07c88cf6a7",
+    "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493",
+    "9df97b02b62ef2f2e96463f68acac6be7bb8745a94cbb97adbc50bb93a798e15c82401db9dbd0d33afb5b1068a009aff"
+  ],
+  "executables": {
+    "node": "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068",
+    "pines-nitro-runtime": "c430d2c187949828bb663f8352b896353e55704cbc31385553c5f68f2b51fe37",
+    "tee-hardware": "06aef8c5f951f9bde1f559f5d3adb81268f0a7058aee6d49da9d8061811e4cc2",
+    "tee-identity": "b6f99bd5adb282ebce56832a28120c81b776cbf59ea73737be122ea7c58ba838"
+  },
+  "selectedEifSha256": "ab6ad5606c0f7da1ab629003e963e7fcbf9514550d31d5eb77d210a10ce370a8",
+  "reproduced": true,
+  "nitroPackagingImage": "sha256:bf734f26988c8bf3bb43a0c2d15e99f3ea134747db4eceee2027b7fc1e99489d",
+  "changesToSource": [
+    "Generated attestation validator from hash-pinned release bytes",
+    "Generated image configuration with successor public ticket and controller keys"
+  ]
+}

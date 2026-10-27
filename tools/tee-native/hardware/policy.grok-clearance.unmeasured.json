@@ -1,0 +1,73 @@
+{
+  "format": "pines-tee-native-policy-set-v1",
+  "context": {
+    "application": "pines",
+    "chain": 8453,
+    "revision": "tee-v5-20261012",
+    "verificationEpoch": "pines-tee-v5-20261012",
+    "protocolVersion": "pines-tee-native-v2",
+    "trustPolicyVersion": 3
+  },
+  "providers": [
+    {
+      "id": "grok",
+      "schema": {
+        "schemaId": "pines.grok.tee.native",
+        "version": 5,
+        "digest": "sha256:dbbe0a0e383d7961752f228e8096f144d2fbcbe6900394dd37a6eafd85e98e6b"
+      },
+      "inventorySha256": "9a7978653b2af053b58ff39234d49a2e8317bb8d789e85e71094f4b1f6d5c591",
+      "policy": {
+        "profile": "pines.grok.tee.native.nitro.v2",
+        "admissionEnabled": false,
+        "providerQualified": false,
+        "clockQualified": false,
+        "lifecycleQualified": false,
+        "measurements": [
+          "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        ],
+        "pcrTuples": [
+          [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          ]
+        ],
+        "simulationAllowed": false,
+        "debugAllowed": false,
+        "providerHost": "grok.com",
+        "providerPort": 443,
+        "channelVsockPort": 8000,
+        "providerEgressVsockPort": 8003,
+        "parentCid": 3,
+        "limits": {
+          "maxSentBytes": 8192,
+          "maxRecvBytes": 8192,
+          "maxHeaderBytes": 4096,
+          "maxBodyBytes": 3584,
+          "maxJsonDepth": 8,
+          "sessionTimeoutMs": 120000,
+          "maxRecvRecords": 64,
+          "maxDecodedBodyBytes": 8192,
+          "maxChunks": 16,
+          "maxRevealedRecvBytes": 4096,
+          "maxRevealedSentBytes": 1024,
+          "protocolBytesPerDirection": 67108864
+        },
+        "verificationEpoch": "pines-tee-v5-20261012",
+        "trustPolicyVersion": 3,
+        "revokedBootIds": [],
+        "revokedWorkerIds": [],
+        "revokedMeasurements": [],
+        "identity": {
+          "generation": "v2",
+          "protocol": "pines-keyed-receipt-v2",
+          "keyArn": "arn:aws:kms:ap-southeast-2:594194277294:key/3d63a788-0acf-42c1-b20c-1c3bdd9e2375",
+          "wrappedSha256": "96d0ced12724aae52577a418cf00dbe7cabf85c327ac7bb1cb900dfdd07d9af1",
+          "configurationAuthority": "ece4f5e90c2344e7551daa7e933b0b2a32b28b4d108e9c1636b0dce786822cc7",
+          "configurationSha256": "be48fb19803397de79e6b7afcd9213dd1e88a9efa77890a0a7124e62f36c6c0c"
+        }
+      }
+    }
+  ]
+}

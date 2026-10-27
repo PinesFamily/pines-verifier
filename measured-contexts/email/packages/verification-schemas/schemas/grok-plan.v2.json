@@ -1,0 +1,126 @@
+{
+  "format": "pines-verification-schema-v1",
+  "schemaId": "pines.grok.plan",
+  "version": 2,
+  "providerId": "GROK-PLAN",
+  "lifecycle": "candidate",
+  "request": {
+    "origin": "https://grok.com",
+    "method": "GET",
+    "path": "/rest/subscriptions",
+    "query": {
+      "status": "SUBSCRIPTION_STATUS_ACTIVE"
+    },
+    "body": {
+      "kind": "empty"
+    }
+  },
+  "capture": {
+    "navigationUrl": "https://grok.com/",
+    "authOrigins": [
+      "https://grok.com"
+    ],
+    "headers": [
+      {
+        "name": "user-agent",
+        "required": true,
+        "secret": true,
+        "validation": "visible-ascii"
+      }
+    ],
+    "cookies": [
+      "sso"
+    ],
+    "trigger": {
+      "pathPrefix": "/rest/"
+    }
+  },
+  "replay": {
+    "transform": "fixed-request-v1",
+    "headers": {
+      "accept": "application/json"
+    }
+  },
+  "limits": {
+    "maxSentBytes": 8192,
+    "maxRecvBytes": 8192,
+    "maxHeaderBytes": 4096,
+    "maxBodyBytes": 3584,
+    "maxJsonDepth": 8,
+    "sessionTimeoutMs": 120000,
+    "maxRecvRecords": 64,
+    "concurrency": 1,
+    "maxDecodedBodyBytes": 8192,
+    "maxChunks": 16,
+    "maxRevealedRecvBytes": 4096,
+    "maxRevealedSentBytes": 1024
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "disclosure": "full-json-body",
+    "privacy": {
+      "mode": "private-headers-v1",
+      "visibleHeaders": [
+        "content-type",
+        "content-length",
+        "transfer-encoding",
+        "content-encoding"
+      ],
+      "encodings": [
+        "gzip",
+        "identity"
+      ]
+    }
+  },
+  "selector": {
+    "kind": "grok-paid-subscription-v1",
+    "maxItems": 4
+  },
+  "fields": [
+    {
+      "id": "xai_user_id",
+      "pointer": "/xaiUserId",
+      "type": "string"
+    },
+    {
+      "id": "tier",
+      "pointer": "/tier",
+      "type": "string"
+    },
+    {
+      "id": "status",
+      "pointer": "/status",
+      "type": "string"
+    }
+  ],
+  "checks": [
+    {
+      "op": "custom",
+      "field": "xai_user_id",
+      "handler": "grok-user-uuid-v1"
+    },
+    {
+      "op": "custom",
+      "field": "tier",
+      "handler": "grok-paid-tier-v1"
+    },
+    {
+      "op": "eq",
+      "field": "status",
+      "value": "SUBSCRIPTION_STATUS_ACTIVE"
+    }
+  ],
+  "identity": {
+    "version": "grok-user-v1",
+    "kind": "field",
+    "field": "xai_user_id"
+  },
+  "claims": {
+    "enabled": false,
+    "domain": "grok.com",
+    "templateIds": [
+      "GROK-PAGE"
+    ]
+  }
+}

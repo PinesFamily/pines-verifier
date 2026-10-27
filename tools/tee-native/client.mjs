@@ -1,6 +1,6 @@
 import {channelKey, exportChannelKey, FRAME, MAX_FRAME, receiver, sender} from './channel.mjs';
 import {check, decode, encode, random} from './wire.mjs';
-import {channelBinding, checkGrant, checkOffer, checkReceipt, checkTicket} from './protocol.mjs';
+import {channelBinding, checkGrant, checkOffer, checkReceipt, checkReceiptFacts, checkTicket} from './protocol.mjs';
 import {byteQueue} from './transport.mjs';
 import {openChannel} from './entry-channel.mjs';
 import {isHardwareProfile, providerForSchema, providerForTicket} from './profile.mjs';
@@ -16,7 +16,8 @@ export async function encryptedClient(cfg) {
   const provider = isHardwareProfile(cfg.policy?.profile) ? providerForSchema(cfg.schema, cfg.disclosurePolicy) : null;
   if (isHardwareProfile(cfg.policy?.profile)) check(provider && provider.profile === cfg.policy.profile && typeof cfg.attemptId === 'string', 'BROWSER_CONTEXT');
   const key = await channelKey(), clientKey = await exportChannelKey(key.publicKey), browserNonce = random();
-  const headers = {'content-type': 'application/json', ...(cfg.authorization ? {authorization: 'Bearer ' + cfg.authorization} : {})};
+  // `clientHeaders`: the extension's `x-pines-extension-version`, an advisory label the identity records at admission.
+  const headers = {'content-type': 'application/json', ...(cfg.clientHeaders ?? {}), ...(cfg.authorization ? {authorization: 'Bearer ' + cfg.authorization} : {})};
   const response = await fetch(cfg.api + '/admission', {method: 'POST', headers, body: JSON.stringify({clientKey, browserNonce, ...(cfg.attemptId ? {attemptId: cfg.attemptId} : {})}), signal: AbortSignal.timeout(10000)});
   check(response.ok, 'ADMISSION_REFUSED');
   const {ticket, offer, grant, route} = await response.json();
@@ -74,6 +75,8 @@ export async function encryptedClient(cfg) {
   return {
     entry,
     disclosurePolicy: selectedDisclosure,
+    // The enclave session: the salt of the e-mail commitment the worker computes for its local facts.
+    session: offer.body.session,
     stats,
     read: () => queue.read(),
     async write(bytes) {
@@ -97,8 +100,17 @@ export async function encryptedClient(cfg) {
       await writeSettled; check(!failed && !closing, 'CHANNEL_REFUSED');
       await wire.write(await outgoing.frames.seal(FRAME.FINISH));
       const result = await terminal; check(final, 'TRUNCATED');
-      const value=offer.body.identity?result.receipt:result;
+      // A RESULT frame is the receipt alone, or `{receipt, facts?, accountConfirmation?, transient?}`: `facts` is the
+      // enclave's signed facts envelope beside the receipt, and the transient e-mail (multi-exchange protocol §2.5) is
+      // forwarded to the identity beside the bundle and never kept here.
+      const wrapped=offer.body.identity||(result&&typeof result==='object'&&Object.hasOwn(result,'receipt')&&!Object.hasOwn(result,'body'));
+      const value=wrapped?result.receipt:result;
+      const transient=wrapped&&result.transient&&typeof result.transient.email==='string'?{email:result.transient.email}:undefined;
+      const envelope=wrapped&&result.facts!==undefined?result.facts:undefined;
       await checkReceipt(value, ticket, offer, grant, cfg.apiKey, cfg.policy, facts);
+      // The local evaluation and the enclave's facts must agree: both present and equal, or both absent.
+      check((envelope===undefined)===(facts?.values===undefined),'LOCAL_FACTS');
+      if(envelope!==undefined)await checkReceiptFacts(envelope, value, offer, facts.values);
       if(offer.body.identity){
         check(typeof facts.accountId==='string','LOCAL_FACTS');
         const confirmation=await incoming.accountConfirmation(accountConfirmationMessage(offer.body.identity,provider,facts.accountId,value.body.pseudonym));
@@ -108,7 +120,7 @@ export async function encryptedClient(cfg) {
       // A lost HTTP response leaves acceptance unknown; durable outbox recovery and
       // the page's authenticated saved-record read decide success.
       let accepted;
-      try { accepted = await fetch(cfg.api + '/result', {method: 'POST', headers, body: JSON.stringify({receipt: value, ticket, offer, grant}), signal: AbortSignal.timeout(10000)}); }
+      try { accepted = await fetch(cfg.api + '/result', {method: 'POST', headers, body: JSON.stringify({receipt: value, ticket, offer, grant, ...(envelope?{facts:envelope}:{}), ...(transient?{transient}:{})}), signal: AbortSignal.timeout(10000)}); }
       catch { throw Error('API_REFUSED'); }
       check(accepted.ok, 'API_REFUSED');
       return {receipt: value, apiAccepted: true, clientAccepted: true};

@@ -1,0 +1,184 @@
+{
+  "format": "pines-verification-schema-v1",
+  "schemaId": "pines.grok.plan",
+  "version": 4,
+  "providerId": "GROK-PLAN",
+  "lifecycle": "candidate",
+  "request": {
+    "origin": "https://grok.com",
+    "method": "GET",
+    "path": "/rest/subscriptions",
+    "query": {
+      "status": "SUBSCRIPTION_STATUS_ACTIVE"
+    },
+    "body": {
+      "kind": "empty"
+    }
+  },
+  "capture": {
+    "navigationUrl": "https://grok.com/",
+    "authOrigins": [
+      "https://grok.com"
+    ],
+    "headers": [
+      {
+        "name": "user-agent",
+        "required": true,
+        "secret": true,
+        "validation": "visible-ascii"
+      }
+    ],
+    "cookies": [
+      "sso"
+    ],
+    "trigger": {
+      "pathPrefix": "/rest/"
+    }
+  },
+  "replay": {
+    "transform": "fixed-request-v1",
+    "headers": {
+      "accept": "application/json"
+    }
+  },
+  "limits": {
+    "maxSentBytes": 8192,
+    "maxRecvBytes": 65536,
+    "maxHeaderBytes": 8192,
+    "maxBodyBytes": 16384,
+    "maxJsonDepth": 16,
+    "sessionTimeoutMs": 120000,
+    "maxRecvRecords": 1024,
+    "concurrency": 1
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "disclosure": "full-json-body"
+  },
+  "selector": {
+    "kind": "grok-paid-subscription-v2",
+    "maxItems": 4
+  },
+  "fields": [
+    {
+      "id": "xai_user_id",
+      "pointer": "/xaiUserId",
+      "type": "string"
+    },
+    {
+      "id": "tier",
+      "pointer": "/tier",
+      "type": "string"
+    },
+    {
+      "id": "status",
+      "pointer": "/status",
+      "type": "string"
+    },
+    {
+      "id": "pines_tenure_start_at",
+      "pointer": "/createTime",
+      "type": "string",
+      "transform": "iso-8601-seconds-v1"
+    },
+    {
+      "id": "grok_billing_system",
+      "pointer": "/billingSystem",
+      "type": "string"
+    },
+    {
+      "id": "pines_billing_platform",
+      "pointer": "/pines_billing_platform_source",
+      "type": "string"
+    }
+  ],
+  "checks": [
+    {
+      "op": "custom",
+      "field": "xai_user_id",
+      "handler": "grok-user-uuid-v1"
+    },
+    {
+      "op": "custom",
+      "field": "tier",
+      "handler": "grok-paid-tier-v1"
+    },
+    {
+      "op": "eq",
+      "field": "status",
+      "value": "SUBSCRIPTION_STATUS_ACTIVE"
+    },
+    {
+      "op": "custom",
+      "field": "grok_billing_system",
+      "handler": "non-empty-string-v1"
+    },
+    {
+      "op": "in",
+      "field": "pines_billing_platform",
+      "values": [
+        "stripe",
+        "apple",
+        "google",
+        "x",
+        "unknown"
+      ]
+    }
+  ],
+  "identity": {
+    "version": "grok-user-v1",
+    "kind": "field",
+    "field": "xai_user_id"
+  },
+  "claims": {
+    "enabled": false,
+    "domain": "grok.com",
+    "templateIds": [
+      "GROK-PAGE"
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "path": "/rest/auth/get-user",
+        "query": {},
+        "headers": []
+      },
+      "fields": [
+        {
+          "id": "grok_user_id",
+          "pointer": "/userId",
+          "type": "string"
+        },
+        {
+          "id": "pines_email",
+          "pointer": "/email",
+          "type": "string"
+        },
+        {
+          "id": "pines_created_at",
+          "pointer": "/createTime",
+          "type": "string",
+          "transform": "iso-8601-seconds-v1"
+        },
+        {
+          "id": "grok_email_confirmed",
+          "pointer": "/emailConfirmed",
+          "type": "boolean"
+        }
+      ],
+      "checks": [
+        {
+          "op": "custom",
+          "field": "grok_user_id",
+          "handler": "grok-user-uuid-v1"
+        }
+      ],
+      "binding": {
+        "kind": "response-field",
+        "pointer": "/userId"
+      }
+    }
+  ]
+}

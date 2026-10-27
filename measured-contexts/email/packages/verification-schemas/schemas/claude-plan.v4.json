@@ -1,0 +1,162 @@
+{
+  "format": "pines-verification-schema-v1",
+  "schemaId": "pines.claude.plan",
+  "version": 4,
+  "providerId": "CLAUDE-PLAN",
+  "lifecycle": "candidate",
+  "request": {
+    "origin": "https://claude.ai",
+    "method": "GET",
+    "path": "/api/organizations/{org_uuid}",
+    "query": {},
+    "body": {
+      "kind": "empty"
+    },
+    "pathParams": {
+      "org_uuid": {
+        "kind": "lowercase-uuid-v1",
+        "bindsTo": "/uuid"
+      }
+    }
+  },
+  "capture": {
+    "navigationUrl": "https://claude.ai/new",
+    "authOrigins": [
+      "https://claude.ai"
+    ],
+    "headers": [
+      {
+        "name": "user-agent",
+        "required": true,
+        "secret": true,
+        "validation": "visible-ascii"
+      }
+    ],
+    "cookies": [
+      "sessionKey"
+    ],
+    "trigger": {
+      "pathPrefix": "/api/"
+    }
+  },
+  "replay": {
+    "transform": "fixed-request-v1",
+    "headers": {
+      "accept": "application/json"
+    }
+  },
+  "limits": {
+    "maxSentBytes": 8192,
+    "maxRecvBytes": 65536,
+    "maxHeaderBytes": 8192,
+    "maxBodyBytes": 49152,
+    "maxJsonDepth": 32,
+    "sessionTimeoutMs": 120000,
+    "maxRecvRecords": 1024,
+    "concurrency": 1
+  },
+  "response": {
+    "status": 200,
+    "contentType": "application/json",
+    "disclosure": "full-json-body"
+  },
+  "selector": {
+    "kind": "claude-paid-personal-org-single-v1"
+  },
+  "fields": [
+    {
+      "id": "organization_uuid",
+      "pointer": "/uuid",
+      "type": "string"
+    },
+    {
+      "id": "rate_limit_tier",
+      "pointer": "/rate_limit_tier",
+      "type": "string"
+    },
+    {
+      "id": "capabilities",
+      "pointer": "/capabilities",
+      "type": "array"
+    },
+    {
+      "id": "pines_created_at",
+      "pointer": "/created_at",
+      "type": "string",
+      "transform": "iso-8601-seconds-v1"
+    },
+    {
+      "id": "pines_billing_platform",
+      "pointer": "/billing_type",
+      "type": "string",
+      "transform": "claude-billing-type-v1"
+    }
+  ],
+  "checks": [
+    {
+      "op": "custom",
+      "field": "organization_uuid",
+      "handler": "claude-org-uuid-v1"
+    },
+    {
+      "op": "custom",
+      "field": "rate_limit_tier",
+      "handler": "claude-paid-tier-v1"
+    },
+    {
+      "op": "custom",
+      "field": "capabilities",
+      "handler": "claude-paid-capabilities-v1"
+    },
+    {
+      "op": "custom",
+      "field": "pines_created_at",
+      "handler": "non-empty-string-v1"
+    },
+    {
+      "op": "custom",
+      "field": "pines_billing_platform",
+      "handler": "non-empty-string-v1"
+    }
+  ],
+  "identity": {
+    "version": "claude-org-v1",
+    "kind": "field",
+    "field": "organization_uuid"
+  },
+  "claims": {
+    "enabled": false,
+    "domain": "claude.ai",
+    "templateIds": [
+      "CLAUDE-PLAN"
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "path": "/api/account",
+        "query": {},
+        "headers": []
+      },
+      "fields": [
+        {
+          "id": "pines_email",
+          "pointer": "/email_address",
+          "type": "string"
+        }
+      ],
+      "checks": [
+        {
+          "op": "custom",
+          "field": "pines_email",
+          "handler": "non-empty-string-v1"
+        }
+      ],
+      "binding": {
+        "kind": "response-member",
+        "pointer": "/memberships",
+        "field": "/organization/uuid"
+      }
+    }
+  ]
+}

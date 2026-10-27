@@ -18,7 +18,7 @@ export type TlsnConfiguration = {
   verifierRevision: string; verifierOrigin: string; schemas: SchemaReference[];
   /** Present on APIs that assign a verifier per attempt. */
   attemptRouting?: AttemptRouting[];
-  /** Present on APIs whose starts, attempt reads and claims take no wallet signature. */
+  /** Present on APIs whose starts, attempt reads and claims take no wallet signature (signature-free admission). */
   walletSignIn?: 'optional';
   tee?: TeeCapability;
   /** The identity’s signed ticket audience, checked by the web against its build artifact. */
@@ -26,6 +26,8 @@ export type TlsnConfiguration = {
   sessionPolicy?: SessionPolicy;
   /** Present only when the API advertises regional direct entry. */
   teeRegionalEntry?: TeeRegionalEntry;
+  /** Explicit Grok retry; the ordinary capability and schema remain the default. */
+  grokAssistance?: {version: 1; enabled: boolean; schema: SchemaReference; tee: TeeCapability};
 };
 export type VerifierAssignment = {instanceId: string; origin: string; revision: string};
 export type ReceiptHandle = {
@@ -58,9 +60,10 @@ export function createTlsnClient(options: {
   openPanel(): Promise<{ok: true; opened: true}>;
   closePanel?(): Promise<{ok: true; closed: true}>;
   capabilities(): Promise<{engine: 'tlsn'; mode: 'Proxy'; application: string; chainId: number; verifierRevision: string; verifierOrigin: string; schemas: SchemaReference[]; claimable: false; routingMode?: AttemptRouting; routing?: AttemptRouting[]; admissionErrorScreen?: boolean; prepareProvider?: boolean; upfrontConsent?: 2; ownerConnection?: boolean; tee?: TeeCapability; sessionPolicySupport?: SessionPolicySupport; regionalEntry?: 1}>;
-  start(recipient: string, schemaId?: string, options?: {signal?: AbortSignal; onAttempt?: (handle: ReceiptHandle) => void; isCurrent?: () => boolean; onPreparation?: (state: {phase: string}) => void}): Promise<ReceiptHandle>;
+  start(recipient: string, schemaId?: string, options?: {signal?: AbortSignal; onAttempt?: (handle: ReceiptHandle) => void; isCurrent?: () => boolean; onPreparation?: (state: {phase: string}) => void; requireGrokEmail?: boolean}): Promise<ReceiptHandle>;
   extensionStatus(handle: ReceiptHandle): Promise<ExtensionState | null>;
   acknowledgeReceipt?(handle: ReceiptHandle): Promise<void>;
+  acknowledgeHeld?(handle: ReceiptHandle): Promise<void>;
   receiptStatus(handle: ReceiptHandle): Promise<ReceiptStatus>;
   cancel(handle: ReceiptHandle): Promise<void>;
   recipientChanged(handle: ReceiptHandle, recipient: string | null): Promise<void>;

@@ -2,12 +2,13 @@ import {capturedFrom, prepareReplay, requestUrl} from '../../../packages/verific
 import {UUID, check} from '../src/policy.js';
 import {isPrivateHeadersSchema, pathParamsFrom, pathParamUnavailableCode, requiresPathParams} from '../src/private-headers.mjs';
 import {prepareReplayFor} from './schema-adapter.mjs';
+import {capturedHeaderNames} from '../src/exchanges.mjs';
 
 // A full browser cookie jar carries unrelated cookies that prepareReplay drops.
 // Bound the raw jar generously; the filtered wire is still bound by maxSentBytes.
 const MAX_COOKIE_JAR = 32768;
 const active = phase => phase === 'waiting' || phase === 'captured';
-const reasons = new Set(['CAPTURE_CANCELLED', 'CAPTURE_NAVIGATED', 'CAPTURE_TAB_CLOSED', 'CAPTURE_OWNER_CHANGED', 'CAPTURE_PERMISSION_LOST', 'CAPTURE_UNAVAILABLE', 'PROVIDER_HTTP_401', 'PROVIDER_HTTP_403', 'PROVIDER_HTTP_429', 'PROVIDER_SIGN_IN_REQUIRED', 'CLAUDE_ORG_UNAVAILABLE']);
+const reasons = new Set(['CAPTURE_CANCELLED', 'CAPTURE_NAVIGATED', 'CAPTURE_TAB_CLOSED', 'CAPTURE_OWNER_CHANGED', 'CAPTURE_PERMISSION_LOST', 'CAPTURE_UNAVAILABLE', 'PROVIDER_CHALLENGE', 'PROVIDER_HTTP_401', 'PROVIDER_HTTP_403', 'PROVIDER_HTTP_429', 'PROVIDER_SIGN_IN_REQUIRED', 'CLAUDE_ORG_UNAVAILABLE']);
 
 // Internal extension capability, never a page-facing API. Only take() returns
 // credential material, once, to the extension's trusted replay consumer.
@@ -21,7 +22,8 @@ export class CaptureSession {
       && typeof owner.documentId === 'string' && owner.documentId.length > 0 && owner.documentId.length <= 128, 'INVALID_CAPTURE_OWNER');
     check(Number.isSafeInteger(deadline) && deadline > now() && deadline - now() <= schema.limits.sessionTimeoutMs, 'INVALID_CAPTURE_DEADLINE');
     // A path-parameter schema (D3) exists only in the private-headers class, and its capture must name the parameter.
-    check(!requiresPathParams(schema) || isPrivateHeadersSchema(schema) && schema.capture.trigger, 'UNSUPPORTED_CAPTURE');
+    // A templated route needs a triggered capture to see the parameter in the page's own traffic (any class).
+    check(!requiresPathParams(schema) || schema.capture.trigger, 'UNSUPPORTED_CAPTURE');
     if (requiresPathParams(schema)) this.#timeout = pathParamUnavailableCode(schema);
     this.#schema = schema; this.#owner = Object.freeze({...owner}); this.#deadline = deadline;
     this.#maxHeaderBytes = schema.limits.maxHeaderBytes; this.#now = now; this.#changed = onChange;
@@ -55,14 +57,19 @@ export class CaptureSession {
     try {
       check(Array.isArray(details.requestHeaders) && details.requestHeaders.length <= 128, 'INVALID_CAPTURE');
       const jar = this.#schema.capture.cookies.length > 0;
-      const names = new Set([...this.#schema.capture.headers.map(rule => rule.name), ...(jar ? ['cookie'] : [])]);
+      // Every exchange's header names (multi-exchange protocol §1.7): a later exchange's own header is captured here too.
+      const names = new Set([...capturedHeaderNames(this.#schema), ...(jar ? ['cookie'] : [])]);
       // Never retain a request history. HTTP/2 pseudo-headers, every unselected
       // browser header and (for cookie-free schemas) the jar are dropped here;
       // prepareReplay then keeps only the schema's named cookies.
       const selected = details.requestHeaders.filter(header => typeof header.name === 'string' && names.has(header.name.toLowerCase()));
       check(selected.every(header => typeof header.value === 'string' && header.value.length <= (header.name.toLowerCase() === 'cookie' ? MAX_COOKIE_JAR : this.#schema.limits.maxSentBytes)), 'INVALID_CAPTURE');
       const captured = {url: details.url, method: details.method, headers: selected};
-      const replay = isPrivateHeadersSchema(this.#schema) ? prepareReplayFor(this.#schema, captured, pathParams) : prepareReplay(this.#schema, captured);
+      const replay = requiresPathParams(this.#schema) ? prepareReplayFor(this.#schema, captured, pathParams) : prepareReplay(this.#schema, captured);
+      // The one-time replay the worker takes carries, beside the first exchange's request, the exchange-only headers
+      // the capture saw, so the worker can build every exchange's replay from this one capture.
+      const exchangeHeaders = selected.filter(header => !this.#schema.capture.headers.some(rule => rule.name === header.name.toLowerCase()) && header.name.toLowerCase() !== 'cookie')
+        .map(header => ({name: header.name.toLowerCase(), value: header.value}));
       const bytes = value => new TextEncoder().encode(value).length;
       // Status carries names and sizes only, never a header or cookie value.
       this.#state.headers = [...this.#schema.capture.headers.filter(rule => replay.headers[rule.name] !== undefined)
@@ -71,7 +78,7 @@ export class CaptureSession {
       if (this.#state.headers.some(header => header.bytes > this.#maxHeaderBytes)) {
         this.#set('failed', 'INVALID_CAPTURE'); return true;
       }
-      this.#replay = replay; this.#set('captured');
+      this.#replay = exchangeHeaders.length ? Object.freeze({...replay, exchangeHeaders: Object.freeze(exchangeHeaders)}) : replay; this.#set('captured');
     } catch {
       this.#set('failed', 'INVALID_CAPTURE');
     }

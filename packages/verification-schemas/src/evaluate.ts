@@ -2,18 +2,19 @@ import { requireThat, reject } from "./errors.ts";
 import { canonicalJson, parseJson, selectJson } from "./json.ts";
 import { headerValue, parseHttp, utf8 } from "./http.ts";
 import type { HttpMessage } from "./http.ts";
-import { acceptEncoding, matchRequestTarget, requestBody } from "./schema.ts";
+import { acceptEncoding, connectionHeader, exchangeViews, matchRequestTarget, requestBody, type ExchangeView } from "./schema.ts";
+import { messageBoundaries } from "./http.ts";
 import { validateHeader } from "./capture.ts";
-import { inspectDisclosedRequest } from "./redacted-request.ts";
+import { inspectDisclosedRequest, type RedactedHeader } from "./redacted-request.ts";
 import { inspectDisclosedResponse } from "./redacted-response.ts";
-import type { EvidenceFacts, Json, ResponseDisclosureMode, VerificationSchema, VerifiedBytes, VerifiedExchange } from "./types.ts";
+import type { EvidenceFacts, FieldTransform, Json, ResponseDisclosureMode, VerificationSchema, VerifiedBytes, VerifiedExchange } from "./types.ts";
 
 /** Returns the authenticated path parameters, `{}` for a schema that declares none. */
-export function validateRequest(schema: VerificationSchema, request: HttpMessage): Readonly<Record<string, string>> {
+export function validateRequest(schema: VerificationSchema, request: HttpMessage, final = true): Readonly<Record<string, string>> {
   const match = /^([A-Z]+) (\S+) HTTP\/1\.1$/.exec(request.startLine);
   requireThat(match && match[1] === schema.request.method, "SCOPE_MISMATCH");
   const pathParams = matchRequestTarget(schema, match![2]!);
-  const fixed = { ...schema.replay.headers, host: new URL(schema.request.origin).host, "accept-encoding": acceptEncoding(schema), connection: "close" };
+  const fixed = { ...schema.replay.headers, host: new URL(schema.request.origin).host, "accept-encoding": acceptEncoding(schema), connection: connectionHeader(final) };
   for (const [name, value] of Object.entries(fixed)) requireThat(headerValue(request, name) === value, "SCOPE_MISMATCH");
   const allowed = new Set([...Object.keys(fixed), "content-length", ...schema.capture.headers.map(rule => rule.name)]);
   if (schema.capture.cookies.length) allowed.add("cookie");
@@ -30,10 +31,12 @@ export function validateRequest(schema: VerificationSchema, request: HttpMessage
     const names = new Set<string>();
     for (const part of cookie.split(";")) {
       const match = /^([a-zA-Z\d_.-]+)=([\x21-\x7e]+)$/.exec(part.trim());
-      requireThat(match && schema.capture.cookies.includes(match[1]!) && !names.has(match[1]!), "SCOPE_MISMATCH");
+      requireThat(match && (schema.capture.cookies.includes(match[1]!) || schema.capture.optionalCookies?.includes(match[1]!)) && !names.has(match[1]!), "SCOPE_MISMATCH");
       names.add(match[1]!);
     }
+    if (schema.capture.optionalCookies) requireThat(schema.capture.cookies.every(name => names.has(name)), "SCOPE_MISMATCH");
   }
+  if (schema.capture.optionalCookies) requireThat(cookie !== undefined, "SCOPE_MISMATCH");
   if (schema.request.body.kind === "empty") requireThat(request.body.length === 0, "SCOPE_MISMATCH");
   else requireThat(canonicalJson(parseJson(utf8(request.body), schema.limits.maxJsonDepth)) === requestBody(schema), "SCOPE_MISMATCH");
   return pathParams;
@@ -133,6 +136,39 @@ function selectGrokSubscription(document: Json, maxItems: number): Json {
   requireThat(selected !== undefined, "CHECK_FAILED");
   return selected;
 }
+// The billing object present on the selected subscription names the platform (capture record §3: a `stripe` object
+// beside `billingSystem` LEGACY). Exactly one known object names it; none or several is `unknown`.
+const GROK_BILLING_OBJECTS: Readonly<Record<string, string>> = Object.freeze(Object.assign(Object.create(null), { stripe: "stripe", apple: "apple", google: "google", x: "x" }));
+function grokBillingPlatform(item: Json): string {
+  if (item === null || typeof item !== "object" || Array.isArray(item)) return "unknown";
+  const present = Object.keys(GROK_BILLING_OBJECTS).filter(key => item[key] !== null && typeof item[key] === "object" && !Array.isArray(item[key]));
+  return present.length === 1 ? GROK_BILLING_OBJECTS[present[0]!]! : "unknown";
+}
+// ChatGPT's plan-limit history (capture record §1): `periods[]` are plan segments of varying length ordered by
+// descending start, overlapping at a plan change; `days` is the depth and coverage is always 30 days; a foreign
+// account id answers an empty list. The facts: the earliest accepted-plan segment's start, else `data_as_of` (no paid
+// period in the window: tenure of at most zero days, which the tenure rule refuses and the proof does not); the usage
+// bucket from `used_basis_points` on `accounting_complete` segments, `unknown` when none carries a figure.
+const CHATGPT_HISTORY_PLANS: readonly string[] = Object.freeze(["plus", "pro", "prolite", "promax"]);
+const CHATGPT_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+function selectChatgptHistory(document: Json): Json {
+  requireThat(document !== null && typeof document === "object" && !Array.isArray(document), "INVALID_JSON");
+  const asOf = document.data_as_of, periods = document.periods;
+  requireThat(typeof asOf === "string" && CHATGPT_ISO.test(asOf) && Array.isArray(periods) && periods.length <= 64, "INVALID_FIELD");
+  let earliest: string | undefined, used = -1;
+  for (const period of periods) {
+    requireThat(period !== null && typeof period === "object" && !Array.isArray(period), "INVALID_JSON");
+    const plan = period.plan_type, start = period.starts_at;
+    requireThat(typeof plan === "string" && typeof start === "string" && CHATGPT_ISO.test(start), "INVALID_FIELD");
+    // Usage is the account's, whichever plan the segment was on; tenure counts accepted plans only.
+    const figure = period.used_basis_points;
+    if (period.accounting_complete === true && typeof figure === "number" && Number.isSafeInteger(figure) && figure >= 0) used = Math.max(used, figure);
+    if (!CHATGPT_HISTORY_PLANS.includes(plan)) continue;
+    if (earliest === undefined || Date.parse(start) < Date.parse(earliest)) earliest = start;
+  }
+  const bucket = used < 0 ? "unknown" : used === 0 ? "none" : used < 1000 ? "low" : used < 5000 ? "medium" : "high";
+  return { tenure_start_at: earliest ?? asOf, usage_bucket: bucket, periods: periods.length, coverage_complete: document.coverage_complete === true };
+}
 function selectDocument(schema: VerificationSchema, document: Json): Json {
   if (!schema.selector) return document;
   switch (schema.selector.kind) {
@@ -149,11 +185,41 @@ function selectDocument(schema: VerificationSchema, document: Json): Json {
       return document;
     }
     case "grok-paid-subscription-v1": return selectGrokSubscription(document, schema.selector.maxItems ?? 64);
+    case "grok-paid-subscription-v2": {
+      const item = selectGrokSubscription(document, schema.selector.maxItems ?? 64) as { [key: string]: Json };
+      return { ...item, pines_billing_platform_source: grokBillingPlatform(item) };
+    }
+    case "chatgpt-plan-limit-history-v1": return selectChatgptHistory(document);
     default: return reject("INVALID_SCHEMA");
   }
 }
 
-function facts(schema: VerificationSchema, response: Json, recipient: string, pathParams: Readonly<Record<string, string>>): EvidenceFacts {
+// The closed field transforms (identity policy specification §4). A billing vocabulary the map does not
+// know becomes `unknown`, which the policy can still deny, rather than refusing the whole proof;
+// a date that does not parse is refused, because a fact that is present must be a fact.
+// Only the recorded vocabulary: `BILLING_SYSTEM_LEGACY` (Grok qualification specification). The xAI-billed
+// value is not captured by us and maps to `unknown` until the owner's capture names it.
+const GROK_BILLING: Readonly<Record<string, string>> = Object.freeze(Object.assign(Object.create(null), { BILLING_SYSTEM_LEGACY: "x" }));
+const CLAUDE_BILLING: Readonly<Record<string, string>> = Object.freeze(Object.assign(Object.create(null), { stripe_subscription: "stripe", apple_subscription: "apple" }));
+const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+export function transformValue(transform: FieldTransform, value: Json): Json {
+  requireThat(typeof value === "string" && value.length <= 64, "CHECK_FAILED");
+  switch (transform) {
+    case "iso-8601-seconds-v1": {
+      requireThat(ISO_8601.test(value), "CHECK_FAILED");
+      const ms = Date.parse(value);
+      requireThat(Number.isFinite(ms) && ms > 0, "CHECK_FAILED");
+      return Math.floor(ms / 1000);
+    }
+    case "grok-billing-system-v1": return GROK_BILLING[value] ?? "unknown";
+    case "claude-billing-type-v1": return CLAUDE_BILLING[value] ?? "unknown";
+    default: return reject("INVALID_SCHEMA");
+  }
+}
+
+type Bound = Readonly<{ pointer: string; expected: Json; member?: string }> | undefined;
+/** One exchange's disclosed values: the selected document's fields, judged by its checks, then transformed. */
+function exchangeValues(schema: VerificationSchema, response: Json, pathParams: Readonly<Record<string, string>>, bound: Bound): Readonly<{ values: Readonly<Record<string, Json>>; document: Json }> {
   const document = selectDocument(schema, response);
   requireThat(document !== null && typeof document === "object" && !Array.isArray(document), "INVALID_JSON");
   // A proven request path parameter must equal the field it declares in the SELECTED
@@ -161,14 +227,23 @@ function facts(schema: VerificationSchema, response: Json, recipient: string, pa
   for (const [name, declared] of Object.entries(schema.request.pathParams ?? {})) {
     requireThat(selectJson(document, declared.bindsTo) === pathParams[name], "PATH_PARAM_MISMATCH");
   }
-  const values: Record<string, Json> = Object.create(null);
+  // A later exchange bound by a response field must name the first exchange's subject; bound by a member, one
+  // element of the array at the pointer must.
+  if (bound && bound.member === undefined) requireThat(selectJson(document, bound.pointer) === bound.expected, "EXCHANGE_BINDING_MISMATCH");
+  if (bound && bound.member !== undefined) {
+    const members = selectJson(document, bound.pointer);
+    requireThat(Array.isArray(members) && members.length <= 64, "EXCHANGE_BINDING_MISMATCH");
+    requireThat(members.some(member => member !== null && typeof member === "object" && !Array.isArray(member) && selectJson(member, bound.member!) === bound.expected), "EXCHANGE_BINDING_MISMATCH");
+  }
+  const raw: Record<string, Json> = Object.create(null), values: Record<string, Json> = Object.create(null);
   for (const field of schema.fields) {
     const value = selectJson(document, field.pointer);
     requireThat(field.type === "array" ? Array.isArray(value) : field.type === "safe-integer" ? typeof value === "number" && Number.isSafeInteger(value) : typeof value === field.type, "INVALID_FIELD");
-    values[field.id] = value;
+    raw[field.id] = value;
+    values[field.id] = field.transform ? transformValue(field.transform, value) : value;
   }
   for (const check of schema.checks) {
-    const value = values[check.field]!;
+    const value = raw[check.field]!;
     let passes: boolean;
     switch (check.op) {
       case "eq": passes = value === check.value; break;
@@ -199,18 +274,15 @@ function facts(schema: VerificationSchema, response: Json, recipient: string, pa
     }
     requireThat(passes, "CHECK_FAILED");
   }
-  return Object.freeze({ providerId: schema.providerId, domain: schema.claims.domain, identityVersion: schema.identity.version, subjectKey: deriveSubjectKey(schema, values[schema.identity.field]!, recipient), values: Object.freeze(values), claimable: false });
+  return Object.freeze({ values: Object.freeze(values), document });
 }
 
-// Browser-only precheck on its own full transcript. Successful parsing is not
-// evidence of TLS authenticity and must not be submitted to the API as proof.
-export function previewExchange(schema: VerificationSchema, sent: Uint8Array, recv: Uint8Array, recipient: string): EvidenceFacts {
-  const request = parseHttp(sent, schema, "sent");
-  const pathParams = validateRequest(schema, request);
-  return factsFromResponse(schema, parseHttp(recv, schema, "recv"), recipient, pathParams);
-}
+/** The per-exchange evidence the session evaluator joins: the view, its parsed response, the
+ *  proven path parameters and a comparable key for the credential that sent it (the
+ *  plaintext values where the evaluator saw them, the hidden slots' names and sizes where it did not). */
+type ExchangeInput = Readonly<{ view: ExchangeView; response: HttpMessage; pathParams: Readonly<Record<string, string>>; credentialKey: string; header: (name: string) => string | undefined }>;
 
-function factsFromResponse(schema: VerificationSchema, response: HttpMessage, recipient: string, pathParams: Readonly<Record<string, string>>): EvidenceFacts {
+function responseDocument(schema: VerificationSchema, response: HttpMessage): Json {
   requireThat(/^HTTP\/1\.1 200 [\x20-\x7e]*$/.test(response.startLine), "SCOPE_MISMATCH");
   const type = headerValue(response, "content-type");
   requireThat(type !== undefined && /^application\/json(?:\s*;\s*charset=(?:utf-8|"utf-8"))?$/i.test(type), "SCOPE_MISMATCH");
@@ -219,9 +291,95 @@ function factsFromResponse(schema: VerificationSchema, response: HttpMessage, re
   const encoding = headerValue(response, "content-encoding")?.toLowerCase();
   if (!schema.response.privacy) requireThat(encoding === undefined || encoding === "identity", "SCOPE_MISMATCH");
   else requireThat((schema.response.privacy.encodings as readonly string[]).includes(encoding ?? "identity"), "RESPONSE_ENCODING_UNSUPPORTED");
-  return facts(schema, parseJson(utf8(response.body), schema.limits.maxJsonDepth), recipient, pathParams);
+  return parseJson(utf8(response.body), schema.limits.maxJsonDepth);
 }
 
+/**
+ * One receipt's facts from every exchange of the session, in order. The first exchange names the
+ * subject; each later one is bound to it as its schema declares, and its values join the same
+ * `values` object (field ids are unique across the schema).
+ */
+function sessionFacts(schema: VerificationSchema, recipient: string, inputs: readonly ExchangeInput[]): EvidenceFacts {
+  const primary = inputs[0]!;
+  const values: Record<string, Json> = Object.create(null);
+  const first = exchangeValues(primary.view.schema, responseDocument(primary.view.schema, primary.response), primary.pathParams, undefined);
+  Object.assign(values, first.values);
+  const identity = values[schema.identity.field]!;
+  for (const input of inputs.slice(1)) {
+    const binding = input.view.binding!;
+    // Every exchange of a session is sent with the same captured credential: the shared secret slots must agree
+    // whatever else the binding checks (structural in the enclave; exact in the browser).
+    requireThat(input.credentialKey === primary.credentialKey, "EXCHANGE_BINDING_MISMATCH");
+    if (binding.kind === "request-header") {
+      const value = input.header(binding.header);
+      requireThat(value !== undefined && value === selectJson(first.document, binding.pointer), "EXCHANGE_BINDING_MISMATCH");
+    }
+    const bound: Bound = binding.kind === "response-field" ? { pointer: binding.pointer, expected: identity }
+      : binding.kind === "response-member" ? { pointer: binding.pointer, expected: identity, member: binding.field } : undefined;
+    Object.assign(values, exchangeValues(input.view.schema, responseDocument(input.view.schema, input.response), input.pathParams, bound).values);
+  }
+  return Object.freeze({ providerId: schema.providerId, domain: schema.claims.domain, identityVersion: schema.identity.version, subjectKey: deriveSubjectKey(schema, identity, recipient), values: Object.freeze(values), claimable: false });
+}
+
+/** The credential every exchange shares: the schema's own secret headers and its cookie jar. An
+ *  exchange-only header is that exchange's selector, not the session's credential. */
+const sharedCredentialNames = (schema: VerificationSchema): readonly string[] =>
+  [...schema.capture.headers.filter(rule => rule.secret).map(rule => rule.name), ...(schema.capture.cookies.length ? ["cookie"] : [])];
+/** The plaintext credential of a request, as one comparable key. */
+function plaintextCredentialKey(schema: VerificationSchema, request: HttpMessage): string {
+  return canonicalJson(sharedCredentialNames(schema).map(name => [name, headerValue(request, name) ?? null]));
+}
+/** A slice of a verified transcript as its own verified bytes: ranges clipped and re-based. */
+function sliceVerified(verified: VerifiedBytes, start: number, end: number): VerifiedBytes {
+  const authenticated = [];
+  for (const range of verified.authenticated) {
+    const from = Math.max(range.start, start), to = Math.min(range.end, end);
+    if (from < to) authenticated.push({ start: from - start, end: to - start });
+  }
+  return { bytes: verified.bytes.subarray(start, end), originalLength: end - start, authenticated };
+}
+const hiddenRequest = (schema: VerificationSchema) => schema.capture.cookies.length > 0 || schema.capture.headers.some(header => header.secret);
+
+// Browser-only precheck on its own full transcript. Successful parsing is not
+// evidence of TLS authenticity and must not be submitted to the API as proof.
+export function previewExchange(schema: VerificationSchema, sent: Uint8Array, recv: Uint8Array, recipient: string): EvidenceFacts {
+  const views = exchangeViews(schema);
+  if (views.length === 1) {
+    const request = parseHttp(sent, schema, "sent");
+    const pathParams = validateRequest(schema, request);
+    return sessionFacts(schema, recipient, [{ view: views[0]!, response: parseHttp(recv, schema, "recv"), pathParams, credentialKey: "", header: name => headerValue(request, name) }]);
+  }
+  requireThat(sent.length <= schema.limits.maxSentBytes && recv.length <= schema.limits.maxRecvBytes, "LIMIT_EXCEEDED");
+  const sentRanges = messageBoundaries(sent, schema, "sent", views.length), recvRanges = messageBoundaries(recv, schema, "recv", views.length);
+  requireThat(sentRanges.length === views.length && recvRanges.length === views.length, "SCOPE_MISMATCH");
+  return sessionFacts(schema, recipient, views.map((view, index) => {
+    const request = parseHttp(sent.subarray(sentRanges[index]!.start, sentRanges[index]!.end), view.schema, "sent");
+    const pathParams = validateRequest(view.schema, request, view.final);
+    const response = parseHttp(recv.subarray(recvRanges[index]!.start, recvRanges[index]!.end), view.schema, "recv");
+    return { view, response, pathParams, credentialKey: plaintextCredentialKey(schema, request), header: name => headerValue(request, name) };
+  }));
+}
+
+/** Every request of a session through the redacted-request inspector, one per exchange, in order: the
+ *  enclave's independent restatement of the request structure. For a single-exchange schema this is the one inspection. */
+export function inspectDisclosedRequests(schema: VerificationSchema, sent: VerifiedBytes): readonly (readonly RedactedHeader[])[] {
+  const views = exchangeViews(schema);
+  if (views.length === 1) return Object.freeze([inspectDisclosedRequest(schema, sent)]);
+  requireThat(sent.bytes instanceof Uint8Array && sent.originalLength === sent.bytes.length && sent.bytes.length <= schema.limits.maxSentBytes, "PARTIAL_TRANSCRIPT");
+  const ranges = messageBoundaries(sent.bytes, schema, "sent", views.length);
+  requireThat(ranges.length === views.length, "SCOPE_MISMATCH");
+  return Object.freeze(views.map((view, index) => inspectDisclosedRequest(view.schema, sliceVerified(sent, ranges[index]!.start, ranges[index]!.end), view.final)));
+}
+/** Every response message of a session, parsed: one per exchange, in order. The enclave's
+ *  inventory inspection runs on each. For a single-exchange schema this is the one message. */
+export function inspectDisclosedResponses(schema: VerificationSchema, recv: VerifiedBytes, responseDisclosure: ResponseDisclosureMode = "selective"): readonly HttpMessage[] {
+  const views = exchangeViews(schema);
+  if (views.length === 1) return Object.freeze([inspectDisclosedResponse(schema, recv, responseDisclosure)]);
+  requireThat(recv.bytes instanceof Uint8Array && recv.originalLength === recv.bytes.length && recv.bytes.length <= schema.limits.maxRecvBytes, "PARTIAL_TRANSCRIPT");
+  const ranges = messageBoundaries(recv.bytes, schema, "recv", views.length);
+  requireThat(ranges.length === views.length, "SCOPE_MISMATCH");
+  return Object.freeze(views.map((view, index) => inspectDisclosedResponse(view.schema, sliceVerified(recv, ranges[index]!.start, ranges[index]!.end), responseDisclosure)));
+}
 export function requireCompleteCoverage(transcript: VerifiedBytes, limit: number): void {
   requireThat(transcript.bytes instanceof Uint8Array && Number.isSafeInteger(transcript.originalLength) && transcript.originalLength > 0 && transcript.originalLength === transcript.bytes.length, "PARTIAL_TRANSCRIPT");
   requireThat(transcript.originalLength <= limit && Array.isArray(transcript.authenticated) && transcript.authenticated.length <= 4096, "LIMIT_EXCEEDED");
@@ -247,18 +405,32 @@ function provenStartLine(bytes: Uint8Array): string {
 // bound to the server-owned attempt/schema. No labels or client metadata are used.
 export function evaluateVerifiedExchange(schema: VerificationSchema, exchange: VerifiedExchange, recipient: string, responseDisclosure: ResponseDisclosureMode = "selective"): EvidenceFacts {
   requireThat(exchange.mode === "Proxy" && exchange.serverName === new URL(schema.request.origin).hostname, "SCOPE_MISMATCH");
-  let pathParams: Readonly<Record<string, string>>;
-  // A cookie is always a credential, so a cookie schema always takes the redacted path.
-  if (schema.capture.cookies.length > 0 || schema.capture.headers.some(header => header.secret)) {
-    inspectDisclosedRequest(schema, exchange.sent);
-    // The inspector proved the start line is public and matches the declared template;
-    // this reads the parameter values back out of it through that same matcher.
-    const match = /^([A-Z]+) (\S+) HTTP\/1\.1$/.exec(provenStartLine(exchange.sent.bytes));
-    requireThat(match && match[1] === schema.request.method, "SCOPE_MISMATCH");
-    pathParams = matchRequestTarget(schema, match![2]!);
-  } else {
-    requireCompleteCoverage(exchange.sent, schema.limits.maxSentBytes);
-    pathParams = validateRequest(schema, parseHttp(exchange.sent.bytes, schema, "sent"));
+  const views = exchangeViews(schema);
+  const judgeRequest = (view: ExchangeView, sent: VerifiedBytes): Readonly<{ pathParams: Readonly<Record<string, string>>; credentialKey: string; header: (name: string) => string | undefined }> => {
+    // A cookie is always a credential, so a cookie schema always takes the redacted path.
+    if (hiddenRequest(view.schema)) {
+      const publicHeaders = new Map<string, string>();
+      const slots = inspectDisclosedRequest(view.schema, sent, view.final, publicHeaders);
+      // The inspector proved the start line is public and matches the declared template;
+      // this reads the parameter values back out of it through that same matcher.
+      const match = /^([A-Z]+) (\S+) HTTP\/1\.1$/.exec(provenStartLine(sent.bytes));
+      requireThat(match && match[1] === view.schema.request.method, "SCOPE_MISMATCH");
+      // Hidden bytes are opaque here, so the credential is compared by its slots: names and sizes.
+      const shared = sharedCredentialNames(schema);
+      return { pathParams: matchRequestTarget(view.schema, match![2]!), credentialKey: canonicalJson(slots.filter(slot => shared.includes(slot.name)).map(slot => [slot.name, slot.end - slot.start])), header: name => publicHeaders.get(name) };
+    }
+    requireCompleteCoverage(sent, view.schema.limits.maxSentBytes);
+    const request = parseHttp(sent.bytes, view.schema, "sent");
+    return { pathParams: validateRequest(view.schema, request, view.final), credentialKey: plaintextCredentialKey(schema, request), header: name => headerValue(request, name) };
+  };
+  if (views.length === 1) {
+    const judged = judgeRequest(views[0]!, exchange.sent);
+    return sessionFacts(schema, recipient, [{ view: views[0]!, response: inspectDisclosedResponse(schema, exchange.recv, responseDisclosure), ...judged }]);
   }
-  return factsFromResponse(schema, inspectDisclosedResponse(schema, exchange.recv, responseDisclosure), recipient, pathParams);
+  for (const side of [exchange.sent, exchange.recv]) requireThat(side.bytes instanceof Uint8Array && Number.isSafeInteger(side.originalLength) && side.originalLength === side.bytes.length && side.originalLength > 0, "PARTIAL_TRANSCRIPT");
+  requireThat(exchange.sent.bytes.length <= schema.limits.maxSentBytes && exchange.recv.bytes.length <= schema.limits.maxRecvBytes, "LIMIT_EXCEEDED");
+  const sentRanges = messageBoundaries(exchange.sent.bytes, schema, "sent", views.length);
+  requireThat(sentRanges.length === views.length, "SCOPE_MISMATCH");
+  const responses = inspectDisclosedResponses(schema, exchange.recv, responseDisclosure);
+  return sessionFacts(schema, recipient, views.map((view, index) => ({ view, response: responses[index]!, ...judgeRequest(view, sliceVerified(exchange.sent, sentRanges[index]!.start, sentRanges[index]!.end)) })));
 }

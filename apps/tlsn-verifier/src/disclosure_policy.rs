@@ -42,6 +42,9 @@ pub enum DisclosurePolicy {
     Redacted,
     FullResponse,
     PrivateHeaders,
+    /// The sybil-facts generation's class (`tools/tee-native/disclosure-policy.mjs` `FACTS_COMPLETE`): the
+    /// reveal-all response path of `FullResponse` with the facts sessions' sizes; the same checks apply.
+    FactsComplete,
 }
 
 impl DisclosurePolicy {
@@ -50,6 +53,10 @@ impl DisclosurePolicy {
             "redacted-response-v1" => Ok(Self::Redacted),
             "full-response-v1" => Ok(Self::FullResponse),
             "private-headers-gzip-v1" => Ok(Self::PrivateHeaders),
+            // Distinct admission/profile class, identical enforced native caps.
+            "grok-clearance-private-v1" => Ok(Self::PrivateHeaders),
+            "facts-complete-v1" => Ok(Self::FactsComplete),
+            "grok-email-complete-v1" => Ok(Self::FactsComplete),
             _ => Err("DISCLOSURE_POLICY"),
         }
     }
@@ -119,7 +126,7 @@ impl DisclosurePolicy {
         if count == 0 {
             return Err("DISCLOSURE_REQUEST_RANGES");
         }
-        if self == Self::FullResponse && received != &(0..bounds.received) {
+        if matches!(self, Self::FullResponse | Self::FactsComplete) && received != &(0..bounds.received) {
             return Err("FULL_RESPONSE_REQUIRED");
         }
         let mut recv_ranges = 0usize;
@@ -294,6 +301,11 @@ mod tests {
             DisclosurePolicy::parse("private-headers-gzip-v1"),
             Ok(DisclosurePolicy::PrivateHeaders)
         );
+        assert_eq!(
+            DisclosurePolicy::parse("facts-complete-v1"),
+            Ok(DisclosurePolicy::FactsComplete)
+        );
+        assert!(DisclosurePolicy::parse("facts-complete").is_err());
     }
 
     /// Four small-response bounds, each refused before the work it limits: the relayed
